@@ -9,19 +9,8 @@ from nucypher.blockchain.eth.agents import ContractAgency, StakingEscrowAgent
 
 from nucypher.blockchain.eth.actors import NucypherTokenActor
 
-# Metrics
-known_nodes_guage = Gauge('ursula_known_nodes', 'Number of currently known nodes')
-work_orders_guage = Gauge('ursula_work_orders', 'Number of accepted work orders')
-missing_confirmation_guage = Gauge('ursula_missing_confirmations', 'Currently missed confirmations')
-learning_status = Enum('ursula_node_discovery', 'Learning loop status', states=['starting', 'running', 'stopped'])
-eth_balance_gauge = Gauge('ursula_eth_balance', 'Ethereum balance')
-token_balance_gauge = Gauge('ursula_token_balance', 'NuNit balance')
-requests_counter = Counter('ursula_http_failures', 'HTTP Failures', ['method', 'endpoint'])
-host_info = Info('ursula_host_info', 'Description of info')
-active_stake_gauge = Gauge('ursula_active_stake', 'Active stake')
 
-
-def collect_prometheus_metrics(ursula, filters, event_metrics):
+def collect_prometheus_metrics(ursula, filters, event_metrics, node_metrics):
     base_payload = {'app_version': nucypher.__version__,
                     'teacher_version': str(ursula.TEACHER_VERSION),
                     'host': str(ursula.rest_interface),
@@ -30,15 +19,15 @@ def collect_prometheus_metrics(ursula, filters, event_metrics):
                     'known_nodes': str(len(ursula.known_nodes))
                     }
 
-    learning_status.state('running' if ursula._learning_task.running else 'stopped')
-    known_nodes_guage.set(len(ursula.known_nodes))
-    work_orders_guage.set(len(ursula.work_orders()))
+    node_metrics["learning_status"].state('running' if ursula._learning_task.running else 'stopped')
+    node_metrics["known_nodes_guage"].set(len(ursula.known_nodes))
+    node_metrics["work_orders_guage"].set(len(ursula.work_orders()))
 
     if not ursula.federated_only:
 
         nucypher_token_actor = NucypherTokenActor(ursula.registry, checksum_address=ursula.checksum_address)
-        eth_balance_gauge.set(nucypher_token_actor.eth_balance)
-        token_balance_gauge.set(nucypher_token_actor.token_balance)
+        node_metrics["eth_balance_gauge"].set(nucypher_token_actor.eth_balance)
+        node_metrics["token_balance_gauge"].set(nucypher_token_actor.token_balance)
 
         for metric_key, metric_value in event_metrics.items():
             for event in filters[metric_key].get_new_entries():
@@ -47,11 +36,11 @@ def collect_prometheus_metrics(ursula, filters, event_metrics):
 
         staking_agent = ContractAgency.get_agent(StakingEscrowAgent, registry=ursula.registry)
         locked = staking_agent.get_locked_tokens(staker_address=ursula.checksum_address, periods=1)
-        active_stake_gauge.set(locked)
+        node_metrics["active_stake_gauge"].set(locked)
 
         missing_confirmations = staking_agent.get_missing_confirmations(
             checksum_address=ursula.checksum_address)  # TODO: lol
-        missing_confirmation_guage.set(missing_confirmations)
+        node_metrics["missing_confirmation_guage"].set(missing_confirmations)
 
         decentralized_payload = {'provider': str(ursula.provider_uri),
                                  'active_stake': str(locked),
@@ -59,10 +48,12 @@ def collect_prometheus_metrics(ursula, filters, event_metrics):
 
         base_payload.update(decentralized_payload)
 
-    host_info.info(base_payload)
+    node_metrics["host_info"].info(base_payload)
 
 
 def get_filters(ursula):
+    if ursula.federated_only:
+        return {}
     staking_agent = ContractAgency.get_agent(StakingEscrowAgent, registry=ursula.registry)
 
     # {event_name: filter}
@@ -110,40 +101,53 @@ def get_filters(ursula):
     return filters
 
 
-def initialize_prometheus_exporter(ursula, port: int) -> None:
+def initialize_prometheus_exporter(ursula, host, port: int, metrics_prefix) -> None:
     from prometheus_client.twisted import MetricsResource
     from twisted.web.resource import Resource
     from twisted.web.server import Site
 
+    node_metrics = {
+        "known_nodes_guage": Gauge(metrics_prefix + '_known_nodes', 'Number of currently known nodes'),
+        "work_orders_guage": Gauge(metrics_prefix + '_work_orders', 'Number of accepted work orders'),
+        "missing_confirmation_guage": Gauge(metrics_prefix + '_missing_confirmations', 'Currently missed confirmations'),
+        "learning_status": Enum(metrics_prefix + '_node_discovery', 'Learning loop status', states=['starting', 'running', 'stopped']),
+        "eth_balance_gauge": Gauge(metrics_prefix + '_eth_balance', 'Ethereum balance'),
+        "token_balance_gauge": Gauge(metrics_prefix + '_token_balance', 'NuNit balance'),
+        "requests_counter": Counter(metrics_prefix + '_http_failures', 'HTTP Failures', ['method', 'endpoint']),
+        "host_info": Info(metrics_prefix + '_host_info', 'Description of info'),
+        "active_stake_gauge": Gauge(metrics_prefix + '_active_stake', 'Active stake')
+    }
+
     # {event_name: {event.argument: metric}}
     event_metrics = {
-        "deposited": {"value": Gauge('ursula_deposited_value', 'Deposited value'),
-                      "periods": Gauge('ursula_deposited_periods', 'Deposited periods')},
-        "locked": {"value":Gauge('ursula_locked_value', 'Locked valued'),
-                   "periods":Gauge('ursula_locked_periods', 'Locked periods')},
-        "divided": {"newValue": Gauge('ursula_divided_new_value', 'New value of divided sub stake'),
-                    "periods": Gauge('ursula_divided_periods', 'Amount of periods for extending sub stake')},
-        "prolonged": {"value": Gauge('ursula_prolonged_value', 'Prolonged value'),
-                      "periods": Gauge('ursula_prolonged_periods', 'Prolonged periods')},
-        "withdrawn": {"value": Gauge('ursula_withdrawn_value', 'Withdrawn value')},
-        "activity_confirmed": {"value": Gauge('ursula_activity_confirmed_value', 'Activity confirmed with value of locked tokens'),
-                               "period": Gauge('ursula_activity_confirmed_period', 'Activity confirmed period')},
-        "mined": {"value": Gauge('ursula_mined_value', 'Mined value'),
-                  "period": Gauge('ursula_mined_period', 'Mined period')},
-        "slashed_reward": {"reward": Gauge('ursula_slashed_reward', 'Reward for investigating slasher')},
-        "slashed_penalty": {"penalty": Gauge('ursula_slashed_penalty', 'Penalty for slashing')},
-        "restake_set": {"reStake": Gauge('ursula_restake_set', '')},
-        "restake_locked": {"lockUntilPeriod": Gauge('ursula_restake_locked_until_period', '')},
-        "work_measurement_set": {"measureWork": Gauge('ursula_work_measurement_set_measure_work', '')},
-        "wind_down_set": {"windDown": Gauge('ursula_wind_down_set_wind_down', 'is windDown')}
+        "deposited": {"value": Gauge(metrics_prefix + '_deposited_value', 'Deposited value'),
+                      "periods": Gauge(metrics_prefix + '_deposited_periods', 'Deposited periods')},
+        "locked": {"value":Gauge(metrics_prefix + '_locked_value', 'Locked valued'),
+                   "periods":Gauge(metrics_prefix + '_locked_periods', 'Locked periods')},
+        "divided": {"newValue": Gauge(metrics_prefix + '_divided_new_value', 'New value of divided sub stake'),
+                    "periods": Gauge(metrics_prefix + '_divided_periods', 'Amount of periods for extending sub stake')},
+        "prolonged": {"value": Gauge(metrics_prefix + '_prolonged_value', 'Prolonged value'),
+                      "periods": Gauge(metrics_prefix + '_prolonged_periods', 'Prolonged periods')},
+        "withdrawn": {"value": Gauge(metrics_prefix + '_withdrawn_value', 'Withdrawn value')},
+        "activity_confirmed": {"value": Gauge(metrics_prefix + '_activity_confirmed_value', 'Activity confirmed with value of locked tokens'),
+                               "period": Gauge(metrics_prefix + '_activity_confirmed_period', 'Activity confirmed period')},
+        "mined": {"value": Gauge(metrics_prefix + '_mined_value', 'Mined value'),
+                  "period": Gauge(metrics_prefix + '_mined_period', 'Mined period')},
+        "slashed_reward": {"reward": Gauge(metrics_prefix + '_slashed_reward', 'Reward for investigating slasher')},
+        "slashed_penalty": {"penalty": Gauge(metrics_prefix + '_slashed_penalty', 'Penalty for slashing')},
+        "restake_set": {"reStake": Gauge(metrics_prefix + '_restake_set', '')},
+        "restake_locked": {"lockUntilPeriod": Gauge(metrics_prefix + '_restake_locked_until_period', '')},
+        "work_measurement_set": {"measureWork": Gauge(metrics_prefix + '_work_measurement_set_measure_work', '')},
+        "wind_down_set": {"windDown": Gauge(metrics_prefix + '_wind_down_set_wind_down', 'is windDown')}
     }
 
     # Scheduling
-    metrics_task = task.LoopingCall(collect_prometheus_metrics, ursula=ursula, filters=get_filters(ursula), event_metrics=event_metrics)
+    metrics_task = task.LoopingCall(collect_prometheus_metrics, ursula=ursula, filters=get_filters(ursula),
+                                    event_metrics=event_metrics, node_metrics=node_metrics)
     metrics_task.start(interval=10, now=False)  # TODO: make configurable
 
     # WSGI Service
     root = Resource()
     root.putChild(b'metrics', MetricsResource())
     factory = Site(root)
-    reactor.listenTCP(port, factory)
+    reactor.listenTCP(port, factory, interface=host)

@@ -53,7 +53,7 @@ from nucypher.cli.options import (
     option_teacher_uri,
 )
 from nucypher.cli.processes import UrsulaCommandProtocol
-from nucypher.cli.types import EIP55_CHECKSUM_ADDRESS, NETWORK_PORT
+from nucypher.cli.types import EIP55_CHECKSUM_ADDRESS, NETWORK_PORT, IPV4_ADDRESS
 from nucypher.config.characters import UrsulaConfiguration
 from nucypher.config.constants import NUCYPHER_ENVVAR_WORKER_ETH_PASSWORD, NUCYPHER_ENVVAR_WORKER_IP_ADDRESS
 from nucypher.config.keyring import NucypherKeyring
@@ -318,7 +318,9 @@ def forget(general_config, config_options, config_file):
 @group_general_config
 @click.option('--interactive', '-I', help="Run interactively", is_flag=True, default=False)
 @click.option('--metrics-port', help="Run a Prometheus metrics exporter on specified HTTP port", type=NETWORK_PORT)
-def run(general_config, character_options, config_file, interactive, dry_run, metrics_port):
+@click.option("--metrics-host", help="Run a prometheus metrics exporter on specified IP address", type=IPV4_ADDRESS)
+@click.option("--metrics-prefix", help="Create metrics params with specified prefix", default="ursula")
+def run(general_config, character_options, config_file, interactive, dry_run, metrics_port, metrics_host, metrics_prefix):
     """
     Run an "Ursula" node.
     """
@@ -355,7 +357,8 @@ def run(general_config, character_options, config_file, interactive, dry_run, me
     if metrics_port:
         # Prevent import without prometheus installed
         from nucypher.utilities.metrics import initialize_prometheus_exporter
-        initialize_prometheus_exporter(ursula=URSULA, port=metrics_port)  # TODO: Integrate with Hendrix TLS Deploy?
+        initialize_prometheus_exporter(ursula=URSULA, host=metrics_host, port=metrics_port,
+                                       metrics_prefix=metrics_prefix)  # TODO: Integrate with Hendrix TLS Deploy?
 
     #
     # Deploy Warnings
