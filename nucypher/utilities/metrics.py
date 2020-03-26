@@ -97,6 +97,9 @@ def get_filters(ursula):
                                                                                         'staker': ursula.checksum_address}),
         "wind_down_set": staking_agent.contract.events.WindDownSet.createFilter(fromBlock='latest',
                                                                                   argument_filters={
+                                                                                      'staker': ursula.checksum_address}),
+        "worker_set": staking_agent.contract.events.WorkerSet.createFilter(fromBlock='latest',
+                                                                                  argument_filters={
                                                                                       'staker': ursula.checksum_address})}
     return filters
 
@@ -138,7 +141,8 @@ def initialize_prometheus_exporter(ursula, host, port: int, metrics_prefix) -> N
         "restake_set": {"reStake": Gauge(metrics_prefix + '_restake_set', '')},
         "restake_locked": {"lockUntilPeriod": Gauge(metrics_prefix + '_restake_locked_until_period', '')},
         "work_measurement_set": {"measureWork": Gauge(metrics_prefix + '_work_measurement_set_measure_work', '')},
-        "wind_down_set": {"windDown": Gauge(metrics_prefix + '_wind_down_set_wind_down', 'is windDown')}
+        "wind_down_set": {"windDown": Gauge(metrics_prefix + '_wind_down_set_wind_down', 'is windDown')},
+        "worker_set": {"startPeriod": Gauge(metrics_prefix + '_worker_set_start_period', 'New worker was set')}
     }
 
     # Scheduling
