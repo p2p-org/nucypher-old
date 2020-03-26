@@ -20,8 +20,8 @@ def collect_prometheus_metrics(ursula, filters, event_metrics, node_metrics):
                     }
 
     node_metrics["learning_status"].state('running' if ursula._learning_task.running else 'stopped')
-    node_metrics["known_nodes_guage"].set(len(ursula.known_nodes))
-    node_metrics["work_orders_guage"].set(len(ursula.work_orders()))
+    node_metrics["known_nodes_gauge"].set(len(ursula.known_nodes))
+    node_metrics["work_orders_gauge"].set(len(ursula.work_orders()))
 
     if not ursula.federated_only:
 
@@ -40,7 +40,7 @@ def collect_prometheus_metrics(ursula, filters, event_metrics, node_metrics):
 
         missing_confirmations = staking_agent.get_missing_confirmations(
             checksum_address=ursula.checksum_address)  # TODO: lol
-        node_metrics["missing_confirmation_guage"].set(missing_confirmations)
+        node_metrics["missing_confirmation_gauge"].set(missing_confirmations)
 
         decentralized_payload = {'provider': str(ursula.provider_uri),
                                  'active_stake': str(locked),
@@ -131,9 +131,9 @@ def initialize_prometheus_exporter(ursula, host, port: int, metrics_prefix) -> N
     from twisted.web.server import Site
 
     node_metrics = {
-        "known_nodes_guage": Gauge(metrics_prefix + '_known_nodes', 'Number of currently known nodes'),
-        "work_orders_guage": Gauge(metrics_prefix + '_work_orders', 'Number of accepted work orders'),
-        "missing_confirmation_guage": Gauge(metrics_prefix + '_missing_confirmations',
+        "known_nodes_gauge": Gauge(metrics_prefix + '_known_nodes', 'Number of currently known nodes'),
+        "work_orders_gauge": Gauge(metrics_prefix + '_work_orders', 'Number of accepted work orders'),
+        "missing_confirmation_gauge": Gauge(metrics_prefix + '_missing_confirmations',
                                             'Currently missed confirmations'),
         "learning_status": Enum(metrics_prefix + '_node_discovery', 'Learning loop status',
                                 states=['starting', 'running', 'stopped']),
