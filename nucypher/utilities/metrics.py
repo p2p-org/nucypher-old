@@ -84,7 +84,7 @@ def get_filters(ursula):
         "slashed_reward": staking_agent.contract.events.Slashed.createFilter(fromBlock='latest',
                                                                              argument_filters={
                                                                                  'investigator': ursula.checksum_address}),
-        "slashed_penalty": staking_agent.contract.events.Deposited.createFilter(fromBlock='latest',
+        "slashed_penalty": staking_agent.contract.events.Slashed.createFilter(fromBlock='latest',
                                                                                 argument_filters={
                                                                                     'staker': ursula.checksum_address}),
         "restake_set": staking_agent.contract.events.ReStakeSet.createFilter(fromBlock='latest',
