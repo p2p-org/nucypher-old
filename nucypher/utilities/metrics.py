@@ -6,8 +6,7 @@ from twisted.internet import reactor, task
 
 import nucypher
 from nucypher.blockchain.eth.agents import ContractAgency, StakingEscrowAgent, WorkLockAgent
-
-from nucypher.blockchain.eth.actors import NucypherTokenActor
+from nucypher.blockchain.eth.token import NU
 
 
 def collect_prometheus_metrics(ursula, filters, event_metrics, node_metrics):
@@ -24,11 +23,6 @@ def collect_prometheus_metrics(ursula, filters, event_metrics, node_metrics):
     node_metrics["work_orders_gauge"].set(len(ursula.work_orders()))
 
     if not ursula.federated_only:
-
-        nucypher_token_actor = NucypherTokenActor(ursula.registry, checksum_address=ursula.checksum_address)
-        node_metrics["eth_balance_gauge"].set(nucypher_token_actor.eth_balance)
-        node_metrics["token_balance_gauge"].set(nucypher_token_actor.token_balance)
-
         for metric_key, metric_value in event_metrics.items():
             for event in filters[metric_key].get_new_entries():
                 for arg in metric_value.keys():
@@ -37,6 +31,11 @@ def collect_prometheus_metrics(ursula, filters, event_metrics, node_metrics):
         staking_agent = ContractAgency.get_agent(StakingEscrowAgent, registry=ursula.registry)
         locked = staking_agent.get_locked_tokens(staker_address=ursula.checksum_address, periods=1)
         node_metrics["active_stake_gauge"].set(locked)
+
+        owned_tokens = staking_agent.owned_tokens(ursula.checksum_address)
+        owned_in_nu = round(NU.from_nunits(owned_tokens), 2)
+
+        node_metrics["owned_tokens_gauge"].set(owned_in_nu)
 
         missing_confirmations = staking_agent.get_missing_confirmations(
             checksum_address=ursula.checksum_address)  # TODO: lol
@@ -85,8 +84,8 @@ def get_filters(ursula):
                                                                              argument_filters={
                                                                                  'investigator': ursula.checksum_address}),
         "slashed_penalty": staking_agent.contract.events.Slashed.createFilter(fromBlock='latest',
-                                                                                argument_filters={
-                                                                                    'staker': ursula.checksum_address}),
+                                                                              argument_filters={
+                                                                                  'staker': ursula.checksum_address}),
         "restake_set": staking_agent.contract.events.ReStakeSet.createFilter(fromBlock='latest',
                                                                              argument_filters={
                                                                                  'staker': ursula.checksum_address}),
@@ -141,7 +140,9 @@ def initialize_prometheus_exporter(ursula, listen_address, port: int, metrics_pr
         "token_balance_gauge": Gauge(f'{metrics_prefix}_token_balance', 'NuNit balance'),
         "requests_counter": Counter(f'{metrics_prefix}_http_failures', 'HTTP Failures', ['method', 'endpoint']),
         "host_info": Info(f'{metrics_prefix}_host_info', 'Description of info'),
-        "active_stake_gauge": Gauge(f'{metrics_prefix}_active_stake', 'Active stake')
+        "active_stake_gauge": Gauge(f'{metrics_prefix}_active_stake', 'Active stake'),
+        "owned_tokens_gauge": Gauge(f'{metrics_prefix})owned_tokens', 'All tokens that belong to the staker, including '
+                                                                      'locked, unlocked and rewards')
     }
 
     # {event_name: {event.argument: metric}}
@@ -165,7 +166,8 @@ def initialize_prometheus_exporter(ursula, listen_address, port: int, metrics_pr
         "slashed_penalty": {"penalty": Gauge(f'{metrics_prefix}_slashed_penalty', 'Penalty for slashing')},
         "restake_set": {"reStake": Gauge(f'{metrics_prefix}_restake_set', 'Restake set')},
         "restake_locked": {"lockUntilPeriod": Gauge(f'{metrics_prefix}_restake_locked_until_period', 'Restake locked')},
-        "work_measurement_set": {"measureWork": Gauge(f'{metrics_prefix}_work_measurement_set_measure_work', 'Work measurement set')},
+        "work_measurement_set": {
+            "measureWork": Gauge(f'{metrics_prefix}_work_measurement_set_measure_work', 'Work measurement set')},
         "wind_down_set": {"windDown": Gauge(f'{metrics_prefix}_wind_down_set_wind_down', 'is windDown')},
         "worker_set": {"startPeriod": Gauge(f'{metrics_prefix}_worker_set_start_period', 'New worker was set')},
         "work_lock_deposited": {"value": Gauge(f'{metrics_prefix}_work_lock_deposited_value', 'Deposited value')},
