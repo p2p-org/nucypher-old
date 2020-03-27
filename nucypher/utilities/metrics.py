@@ -42,10 +42,17 @@ def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetri
 
         staking_agent = ContractAgency.get_agent(StakingEscrowAgent, registry=ursula.registry)
         locked = staking_agent.get_locked_tokens(staker_address=ursula.checksum_address, periods=1)
-        node_metrics["active_stake_gauge"].set(locked)
+        locked_in_nu = round(NU.from_nunits(locked), 2)
+
+        node_metrics["active_stake_gauge"].set(locked_in_nu)
 
         owned_tokens = staking_agent.owned_tokens(ursula.checksum_address)
         owned_in_nu = round(NU.from_nunits(owned_tokens), 2)
+
+        unlocked_tokens = owned_tokens - locked
+        unlocked_in_nu = round(NU.from_nunits(unlocked_tokens), 2)
+
+        node_metrics["unlocked_tokens_gauge"].set(unlocked_in_nu)
 
         node_metrics["owned_tokens_gauge"].set(owned_in_nu)
 
@@ -210,7 +217,8 @@ def initialize_prometheus_exporter(ursula, listen_address, port: int, metrics_pr
         "host_info": Info(f'{metrics_prefix}_host_info', 'Description of info'),
         "active_stake_gauge": Gauge(f'{metrics_prefix}_active_stake', 'Active stake'),
         "owned_tokens_gauge": Gauge(f'{metrics_prefix}_owned_tokens', 'All tokens that belong to the staker, including '
-                                                                      'locked, unlocked and rewards')
+                                                                      'locked, unlocked and rewards'),
+        "unlocked_tokens_gauge": Gauge(f'{metrics_prefix}_unlocked_tokens', 'Amount of unlocked tokens')
     }
 
     event_metrics_collectors = get_event_metrics_collectors(ursula, metrics_prefix)
