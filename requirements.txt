@@ -95,3 +95,4 @@ web3==5.6.0
 websockets==8.1
 werkzeug==1.0.0
 zope.interface==4.7.1
+prometheus_client==0.7.1
