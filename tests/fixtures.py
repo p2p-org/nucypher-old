@@ -33,7 +33,7 @@ from umbral.keys import UmbralPrivateKey
 from umbral.signing import Signer
 from web3 import Web3
 
-from nucypher.blockchain.economics import StandardTokenEconomics
+from nucypher.blockchain.economics import StandardTokenEconomics, BaseEconomics
 from nucypher.blockchain.eth.actors import Staker, StakeHolder
 from nucypher.blockchain.eth.agents import NucypherTokenAgent
 from nucypher.blockchain.eth.clients import NuCypherGethDevProcess
@@ -66,8 +66,8 @@ from nucypher.config.characters import (
 )
 from nucypher.crypto.powers import TransactingPower
 from nucypher.crypto.utils import canonical_address_from_umbral_key
-from nucypher.keystore import keystore
-from nucypher.keystore.db import Base
+from nucypher.datastore import datastore
+from nucypher.datastore.db import Base
 from nucypher.policy.collections import IndisputableEvidence, WorkOrder
 from nucypher.utilities.logging import GlobalLoggerSettings
 from nucypher.utilities.sandbox.blockchain import token_airdrop, TesterBlockchain
@@ -123,11 +123,11 @@ def temp_dir_path():
 
 
 @pytest.fixture(scope="module")
-def test_keystore():
+def test_datastore():
     engine = create_engine('sqlite:///:memory:')
     Base.metadata.create_all(engine)
-    test_keystore = keystore.KeyStore(engine)
-    yield test_keystore
+    test_datastore = datastore.Datastore(engine)
+    yield test_datastore
 
 
 @pytest.fixture(scope='function')
@@ -402,7 +402,7 @@ def federated_ursulas(ursula_federated_test_config):
 def token_economics(testerchain):
 
     # Get current blocktime
-    blockchain = BlockchainInterfaceFactory.get_interface()
+    blockchain = BlockchainInterfaceFactory.get_interface(provider_uri=testerchain.provider_uri)
     now = blockchain.w3.eth.getBlock(block_identifier='latest').timestamp
 
     # Calculate instant start time
@@ -412,13 +412,16 @@ def token_economics(testerchain):
 
     # Ends in one hour
     bidding_end_date = start_date + one_hour_in_seconds
+    cancellation_end_date = bidding_end_date + one_hour_in_seconds
 
     economics = StandardTokenEconomics(
         worklock_boosting_refund_rate=200,
-        worklock_commitment_duration=60*60,  # seconds
-        worklock_supply=NU.from_tokens(1_000_000),
+        worklock_commitment_duration=60,  # periods
+        worklock_supply=10*BaseEconomics._default_maximum_allowed_locked,
         bidding_start_date=bidding_start_date,
-        bidding_end_date=bidding_end_date
+        bidding_end_date=bidding_end_date,
+        cancellation_end_date=cancellation_end_date,
+        worklock_min_allowed_bid=Web3.toWei(1, "ether")
     )
     return economics
 
@@ -568,7 +571,7 @@ def _make_agency(testerchain, test_registry, token_economics):
     return token_agent, staking_agent, policy_agent
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope='module', autouse=True)
 def test_registry_source_manager(testerchain, test_registry):
 
     class MockRegistrySource(CanonicalRegistrySource):
@@ -599,7 +602,7 @@ def test_registry_source_manager(testerchain, test_registry):
             return raw_registry_data
 
     RegistrySourceManager._FALLBACK_CHAIN = (MockRegistrySource,)
-    NetworksInventory.networks = (TEMPORARY_DOMAIN,)
+    NetworksInventory.NETWORKS = (TEMPORARY_DOMAIN,)
 
 
 @pytest.fixture(scope='module')

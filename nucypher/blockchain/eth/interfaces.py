@@ -495,7 +495,7 @@ class BlockchainInterface:
             start = maya.now()
             confirmations_so_far = self.get_confirmations(receipt)
             while confirmations_so_far < confirmations:
-                self.log.info(f"So far, we've only got {confirmations_so_far} confirmations. "
+                self.log.info(f"So far, we've received {confirmations_so_far} confirmations. "
                               f"Waiting for {confirmations - confirmations_so_far} more.")
                 time.sleep(3)
                 confirmations_so_far = self.get_confirmations(receipt)
@@ -512,6 +512,11 @@ class BlockchainInterface:
             raise ValueError(f"Can't get number of confirmations for transaction {receipt['transactionHash'].hex()}, "
                              f"as it seems to come from {-confirmations} blocks in the future...")
         return confirmations
+
+    def get_blocktime(self):
+        highest_block = self.w3.eth.getBlock('latest')
+        now = highest_block['timestamp']
+        return now
 
     @validate_checksum_address
     def send_transaction(self,
@@ -843,8 +848,8 @@ class BlockchainInterfaceFactory:
     _default_interface_class = BlockchainInterface
 
     CachedInterface = collections.namedtuple('CachedInterface', ['interface',    # type: BlockchainInterface
-                                                                 'sync',
-                                                                 'emitter'])
+                                                                 'sync',         # type: bool
+                                                                 'emitter'])     # type: StdoutEmitter
 
     class FactoryError(Exception):
         pass
@@ -875,7 +880,7 @@ class BlockchainInterfaceFactory:
                            interface: BlockchainInterface,
                            sync: bool = False,
                            emitter=None,
-                           force: bool = False,
+                           force: bool = False
                            ) -> None:
 
         provider_uri = interface.provider_uri
@@ -888,7 +893,6 @@ class BlockchainInterfaceFactory:
     @classmethod
     def initialize_interface(cls,
                              provider_uri: str,
-                             gas_strategy: Callable = None,
                              sync: bool = False,
                              emitter=None,
                              interface_class: Interfaces = None,
@@ -904,7 +908,6 @@ class BlockchainInterfaceFactory:
         if not interface_class:
             interface_class = cls._default_interface_class
         interface = interface_class(provider_uri=provider_uri,
-                                    gas_strategy=gas_strategy,
                                     *interface_args,
                                     **interface_kwargs)
 
@@ -939,11 +942,12 @@ class BlockchainInterfaceFactory:
     @classmethod
     def get_or_create_interface(cls,
                                 provider_uri: str,
-                                gas_strategy: str = None
+                                *interface_args,
+                                **interface_kwargs
                                 ) -> BlockchainInterface:
         try:
             interface = cls.get_interface(provider_uri=provider_uri)
         except (cls.InterfaceNotInitialized, cls.NoRegisteredInterfaces):
-            cls.initialize_interface(provider_uri=provider_uri, gas_strategy=gas_strategy)
+            cls.initialize_interface(provider_uri=provider_uri, *interface_args, **interface_kwargs)
             interface = cls.get_interface(provider_uri=provider_uri)
         return interface
