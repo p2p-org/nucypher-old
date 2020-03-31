@@ -55,11 +55,6 @@ staking_agent = ContractAgency.get_agent(agent_class=StakingEscrowAgent, registr
 policy_agent = ContractAgency.get_agent(agent_class=PolicyManagerAgent, registry=registry)  # type: PolicyManagerAgent
 token_agent = ContractAgency.get_agent(agent_class=NucypherTokenAgent, registry=registry)  # type: NucypherTokenAgent
 
-filter = staking_agent.contract.events.Locked.createFilter(fromBlock=0, argument_filters={'staker': "0xCB06551543A48e812D72E00BF88C4eF80a29208e"})
-
-for x in filter.get_new_entries():
-    print(x['args']['value'])
-
 
 emitter.echo(message=f"Current period: {staking_agent.get_current_period()}", color='yellow')
 emitter.echo(message=f"NuCypher agents pre-loaded in variables 'staking_agent', 'policy_agent', and 'token_agent'",
