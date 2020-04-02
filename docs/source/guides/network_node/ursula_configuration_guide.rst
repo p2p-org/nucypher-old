@@ -111,7 +111,7 @@ Running an Ursula via CLI (Interactive)
 
 .. code:: bash
 
-    (nucypher)$ nucypher ursula init --provider <YOUR PROVIDER URI> --poa --staker-address <YOUR STAKER ADDRESS> --network <NETWORK_NAME>
+    (nucypher)$ nucypher ursula init --provider <YOUR PROVIDER URI> --poa --network <NETWORK_NAME>
 
 
 Replace ``<YOUR PROVIDER URI>`` with a valid node web3 node provider string, for example:
@@ -125,7 +125,7 @@ Replace ``<YOUR PROVIDER URI>`` with a valid node web3 node provider string, for
 
 ``<NETWORK_NAME>`` is the name of the NuCypher network domain where the node will run.
 
-.. note:: If you're participating in NuCypher's incentivized testnet, this name is ``cassandra``.
+.. note:: If you're participating in NuCypher's incentivized testnet, this name is ``gemini``.
 
 
 .. note:: If you're a preallocation user, recall that you're using a contract to stake.
@@ -196,7 +196,7 @@ Assuming geth is running locally on goerli, configure and run an Ursula using po
     export NUCYPHER_WORKER_ETH_PASSWORD=<YOUR WORKER ETH ACCOUNT PASSWORD>
 
     # Interactive Ursula-Worker Initialization
-    docker run -it -v ~/.local/share/nucypher:/root/.local/share/nucypher -v ~/.ethereum/:/root/.ethereum -p 9151:9151 -e NUCYPHER_KEYRING_PASSWORD nucypher/nucypher:latest nucypher ursula init --provider file:///root/.ethereum/goerli/geth.ipc --staker-address <YOUR STAKING ADDRESS> --network <NETWORK_NAME>
+    docker run -it -v ~/.local/share/nucypher:/root/.local/share/nucypher -v ~/.ethereum/:/root/.ethereum -p 9151:9151 -e NUCYPHER_KEYRING_PASSWORD nucypher/nucypher:latest nucypher ursula init --provider file:///root/.ethereum/goerli/geth.ipc --network <NETWORK_NAME>
 
     # Daemonized Ursula
     docker run -d -v ~/.local/share/nucypher:/root/.local/share/nucypher -v ~/.ethereum/:/root/.ethereum -p 9151:9151 -e NUCYPHER_KEYRING_PASSWORD -e NUCYPHER_WORKER_ETH_PASSWORD nucypher/nucypher:latest nucypher ursula run
