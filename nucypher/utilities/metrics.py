@@ -28,7 +28,7 @@ class EventMetricsCollector:
             print("EVENTS", event)
             for arg in self.metrics.keys():
                 self.metrics[arg].set(event['args'][arg])
-                self.metrics[arg].labels("block_number").set(event.block_number)
+                # self.metrics[arg].labels("block_number").set(event.block_number)
 
 
 def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetricsCollector], node_metrics):
