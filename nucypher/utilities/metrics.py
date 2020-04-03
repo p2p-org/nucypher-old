@@ -13,11 +13,18 @@ from typing import List
 class EventMetricsCollector:
 
     def __init__(self, contract_agent, event_name, argument_filters, metrics):
-        self.event_filter = contract_agent.contract.events[event_name].createFilter(fromBlock='latest')
+        self.event_filter = contract_agent.contract.events[event_name].createFilter(fromBlock='latest',
+                                                                                    argument_filters=argument_filters)
         self.metrics = metrics
 
-    def collect(self):
-        for event in self.event_filter.get_new_entries():
+        self.collect(all_entries=True)
+
+    def collect(self, all_entries=False):
+        if all_entries:
+            events = self.event_filter.get_all_entries()
+        else:
+            events = self.event_filter.get_new_entries()
+        for event in events:
             print("EVENTS", event)
             for arg in self.metrics.keys():
                 self.metrics[arg].set(event['args'][arg])
