@@ -206,12 +206,6 @@ def get_event_metrics_collectors(ursula, metrics_prefix):
             }
         },
         {
-            "name": "work_lock_burnt", "contract_agent": work_lock_agent, "event": "Burnt",
-            "argument_filters": {"sender": ursula.checksum_address},
-            "metrics": {"value": Gauge(f'{metrics_prefix}_worklock_burnt_value', 'Burnt value'),
-                        "block_number": Gauge(f'{metrics_prefix}_worklock_burnt_block_number', 'Block number')}
-        },
-        {
             "name": "work_lock_canceled", "contract_agent": work_lock_agent, "event": "Canceled",
             "argument_filters": {"sender": ursula.checksum_address},
             "metrics": {"value": Gauge(f'{metrics_prefix}_worklock_canceled_value', 'Canceled value'),
