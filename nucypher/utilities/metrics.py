@@ -42,7 +42,7 @@ def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetri
 
         nucypher_token_actor = NucypherTokenActor(ursula.registry, checksum_address=ursula.checksum_address)
         node_metrics["eth_balance_gauge"].set(nucypher_token_actor.eth_balance)
-        node_metrics["token_balance_gauge"].set(nucypher_token_actor.token_balance)
+        node_metrics["token_balance_gauge"].set(int(nucypher_token_actor.token_balance))
 
         for event_metrics_collector in event_metrics_collectors:
             event_metrics_collector.collect()
