@@ -13,7 +13,7 @@ from typing import List
 class EventMetricsCollector:
 
     def __init__(self, contract_agent, event_name, argument_filters, metrics):
-        self.event_filter = contract_agent.contract.events[event_name].createFilter(fromBlock='latest',
+        self.event_filter = contract_agent.contract.events[event_name].createFilter(fromBlock=0, toBlock='latest',
                                                                                     argument_filters=argument_filters)
         self.metrics = metrics
 
