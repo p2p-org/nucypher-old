@@ -20,10 +20,7 @@ class EventMetricsCollector:
         self.collect(all_entries=True)
 
     def collect(self, all_entries=False):
-        if all_entries:
-            events = self.event_filter.get_all_entries()
-        else:
-            events = self.event_filter.get_new_entries()
+        events = self.event_filter.get_new_entries()
         for event in events:
             print("EVENT", event)
             for arg in self.metrics.keys():
