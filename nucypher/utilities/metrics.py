@@ -17,12 +17,11 @@ class EventMetricsCollector:
                                                                                       argument_filters=argument_filters)
         self.metrics = metrics
 
-        self.collect(all_entries=True)
+        self.collect(self)
 
-    def collect(self, all_entries=False):
+    def collect(self):
         events = self.event_filter.get_new_entries()
         for event in events:
-            print("EVENT", event)
             for arg in self.metrics.keys():
                 if type(self.metrics[arg]) is Histogram or type(self.metrics[arg]) is Summary:
                     self.metrics[arg].labels(block_number=event["blockNumber"]).observe(event['args'][arg])
@@ -100,8 +99,8 @@ def get_event_metrics_collectors(ursula, metrics_prefix):
         {
             "name": "deposited", "contract_agent": staking_agent, "event": "Deposited",
             "argument_filters": {"staker": ursula.checksum_address},
-            "metrics": {"value": Histogram(f'{metrics_prefix}_deposited_value', 'Deposited value', ["block_number"]),
-                        "periods": Histogram(f'{metrics_prefix}_deposited_periods', 'Deposited periods', ["block_number"])}
+            "metrics": {"value": Gauge(f'{metrics_prefix}_deposited_value', 'Deposited value', ["block_number"]),
+                        "periods": Gauge(f'{metrics_prefix}_deposited_periods', 'Deposited periods', ["block_number"])}
         },
         {
             "name": "locked", "contract_agent": staking_agent, "event": "Locked",
@@ -119,8 +118,8 @@ def get_event_metrics_collectors(ursula, metrics_prefix):
         {
             "name": "prolonged", "contract_agent": staking_agent, "event": "Prolonged",
             "argument_filters": {"staker": ursula.checksum_address},
-            "metrics": {"value": Histogram(f'{metrics_prefix}_prolonged_value', 'Prolonged value', ["block_number"]),
-                        "periods": Summary(f'{metrics_prefix}_prolonged_periods', 'Prolonged periods', ["block_number"])}
+            "metrics": {"value": Gauge(f'{metrics_prefix}_prolonged_value', 'Prolonged value', ["block_number"]),
+                        "periods": Gauge(f'{metrics_prefix}_prolonged_periods', 'Prolonged periods', ["block_number"])}
         },
         {
             "name": "withdrawn", "contract_agent": staking_agent, "event": "Withdrawn",
