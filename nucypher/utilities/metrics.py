@@ -1,5 +1,5 @@
 try:
-    from prometheus_client import Gauge, Enum, Counter, Info, Histogram
+    from prometheus_client import Gauge, Enum, Counter, Info, Histogram, Summary
 except ImportError:
     raise ImportError('prometheus_client is not installed - Install it and try again.')
 from twisted.internet import reactor, task
@@ -14,7 +14,7 @@ class EventMetricsCollector:
 
     def __init__(self, contract_agent, event_name, argument_filters, metrics):
         self.event_filter = contract_agent.contract.events[event_name].createFilter(fromBlock='latest',
-                                                                                    argument_filters=argument_filters)
+                                                                                      argument_filters=argument_filters)
         self.metrics = metrics
 
         self.collect(all_entries=True)
@@ -25,8 +25,9 @@ class EventMetricsCollector:
         else:
             events = self.event_filter.get_new_entries()
         for event in events:
+            print("EVENT", event)
             for arg in self.metrics.keys():
-                if type(self.metrics[arg]) is Histogram:
+                if type(self.metrics[arg]) is Histogram or type(self.metrics[arg]) is Summary:
                     self.metrics[arg].labels(block_number=event["blockNumber"]).observe(event['args'][arg])
                 else:
                     self.metrics[arg].labels(block_number=event["blockNumber"]).set(event['args'][arg])
@@ -122,7 +123,7 @@ def get_event_metrics_collectors(ursula, metrics_prefix):
             "name": "prolonged", "contract_agent": staking_agent, "event": "Prolonged",
             "argument_filters": {"staker": ursula.checksum_address},
             "metrics": {"value": Histogram(f'{metrics_prefix}_prolonged_value', 'Prolonged value', ["block_number"]),
-                        "periods": Histogram(f'{metrics_prefix}_prolonged_periods', 'Prolonged periods', ["block_number"])}
+                        "periods": Summary(f'{metrics_prefix}_prolonged_periods', 'Prolonged periods', ["block_number"])}
         },
         {
             "name": "withdrawn", "contract_agent": staking_agent, "event": "Withdrawn",
