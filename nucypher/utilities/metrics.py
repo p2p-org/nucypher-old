@@ -151,7 +151,8 @@ def get_event_metrics_collectors(ursula, metrics_prefix):
         {
             "name": "worker_set", "contract_agent": staking_agent, "event": "WorkerSet",
             "argument_filters": {"staker": ursula.checksum_address},
-            "metrics": {"startPeriod": Gauge(f'{metrics_prefix}_worker_set_start_period', 'New worker was set')}
+            "metrics": {"startPeriod": Gauge(f'{metrics_prefix}_worker_set_start_period', 'New worker was set'),
+                        "block_number": Gauge(f'{metrics_prefix}_worker_set_block_number', 'WorkerSet block number')}
         },
         {
             "name": "work_lock_deposited", "contract_agent": work_lock_agent, "event": "Deposited",
