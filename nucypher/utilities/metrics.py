@@ -8,29 +8,38 @@ import nucypher
 from nucypher.blockchain.eth.agents import ContractAgency, StakingEscrowAgent, WorkLockAgent, PolicyManagerAgent
 from nucypher.blockchain.eth.actors import NucypherTokenActor
 from typing import List
-from nucypher.blockchain.eth.interfaces import BlockchainInterface, BlockchainInterfaceFactory
+from nucypher.blockchain.eth.interfaces import BlockchainInterfaceFactory
 
 
 class EventMetricsCollector:
 
-    def __init__(self, contract_agent, event_name, argument_filters, metrics):
+    def __init__(self, staker_address, worker_address, contract_agent, event_name, argument_filters, metrics):
         self.event_filter = contract_agent.contract.events[event_name].createFilter(fromBlock='latest',
-                                                                                      argument_filters=argument_filters)
+                                                                                    argument_filters=argument_filters)
         self.metrics = metrics
+        self.event_name = event_name
+        self.staker_address = staker_address
+        self.worker_address = worker_address
+        self.contract_agent = contract_agent
 
-        self.collect()
+        if self.event_name == "ReStakeSet":
+            self.metrics["reStake"].set(self.contract_agent.is_restaking(staker_address))
 
-    def collect(self):
+        if self.event_name == "WindDownSet":
+            self.metrics["windDown"].set(self.contract_agent.is_winding_down(staker_address))
+
+    def collect(self, node_metrics):
         events = self.event_filter.get_new_entries()
         for event in events:
             for arg in self.metrics.keys():
                 if arg == "block_number":
                     self.metrics["block_number"].set(event["blockNumber"])
                     continue
-                if type(self.metrics[arg]) is Histogram or type(self.metrics[arg]) is Summary:
-                    self.metrics[arg].observe(event['args'][arg])
-                else:
-                    self.metrics[arg].set(event['args'][arg])
+                self.metrics[arg].set(event['args'][arg])
+
+            if self.event_name == "WorkerSet":
+                node_metrics["current_worker_is_me_gauge"].set(
+                    self.contract_agent.get_worker_from_staker(self.staker_address) == self.worker_address)
 
 
 def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetricsCollector], node_metrics):
@@ -45,7 +54,6 @@ def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetri
     node_metrics["learning_status"].state('running' if ursula._learning_task.running else 'stopped')
     node_metrics["known_nodes_gauge"].set(len(ursula.known_nodes))
     node_metrics["work_orders_gauge"].set(len(ursula.work_orders()))
-
 
     if not ursula.federated_only:
 
@@ -62,17 +70,17 @@ def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetri
         node_metrics["worker_token_balance_gauge"].set(int(nucypher_worker_token_actor.token_balance))
 
         for event_metrics_collector in event_metrics_collectors:
-            event_metrics_collector.collect()
+            event_metrics_collector.collect(node_metrics)
 
         staking_agent = ContractAgency.get_agent(StakingEscrowAgent, registry=ursula.registry)
         work_lock_agent = ContractAgency.get_agent(WorkLockAgent, registry=ursula.registry)
 
-        node_metrics["substakes_count_gauge"].set(staking_agent.contract.functions.getSubStakesLength(ursula.checksum_address).call())
+        node_metrics["substakes_count_gauge"].set(
+            staking_agent.contract.functions.getSubStakesLength(ursula.checksum_address).call())
 
         locked = staking_agent.get_locked_tokens(staker_address=ursula.checksum_address, periods=1)
 
         node_metrics["active_stake_gauge"].set(locked)
-
 
         owned_tokens = staking_agent.owned_tokens(ursula.checksum_address)
 
@@ -82,7 +90,8 @@ def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetri
 
         node_metrics["owned_tokens_gauge"].set(owned_tokens)
 
-        node_metrics["available_refund_gauge"].set(work_lock_agent.get_available_refund(checksum_address=ursula.checksum_address))
+        node_metrics["available_refund_gauge"].set(
+            work_lock_agent.get_available_refund(checksum_address=ursula.checksum_address))
 
         node_metrics["policies_held_gauge"].set(len(ursula.datastore.get_all_policy_arrangements()))
 
@@ -139,12 +148,13 @@ def get_event_metrics_collectors(ursula, metrics_prefix):
             "name": "slashed_penalty", "contract_agent": staking_agent, "event": "Slashed",
             "argument_filters": {"staker": ursula.checksum_address},
             "metrics": {"penalty": Gauge(f'{metrics_prefix}_slashed_penalty', 'Penalty for slashing'),
-                        "block_number": Gauge(f'{metrics_prefix}_slashed_penalty_block_number', 'Slashed penalty block number')}
+                        "block_number": Gauge(f'{metrics_prefix}_slashed_penalty_block_number',
+                                              'Slashed penalty block number')}
         },
         {
             "name": "restake_set", "contract_agent": staking_agent, "event": "ReStakeSet",
             "argument_filters": {"staker": ursula.checksum_address},
-            "metrics": {"reStake": Gauge(f'{metrics_prefix}_restake_set', 'Restake set')}
+            "metrics": {"reStake": Gauge(f'{metrics_prefix}_restaking', 'Restake set')}
         },
         {
             "name": "restake_locked", "contract_agent": staking_agent, "event": "ReStakeLocked",
@@ -154,7 +164,7 @@ def get_event_metrics_collectors(ursula, metrics_prefix):
         {
             "name": "wind_down_set", "contract_agent": staking_agent, "event": "WindDownSet",
             "argument_filters": {"staker": ursula.checksum_address},
-            "metrics": {"windDown": Gauge(f'{metrics_prefix}_wind_down_set_wind_down', 'is windDown')}
+            "metrics": {"windDown": Gauge(f'{metrics_prefix}_wind_down', 'is windDown')}
         },
         {
             "name": "worker_set", "contract_agent": staking_agent, "event": "WorkerSet",
@@ -198,8 +208,9 @@ def get_event_metrics_collectors(ursula, metrics_prefix):
         }
     )
 
-    event_metrics_collectors = [EventMetricsCollector(config["contract_agent"], config["event"],
-                                config["argument_filters"], config["metrics"]) for config in event_collectors_config]
+    event_metrics_collectors = [
+        EventMetricsCollector(ursula.checksum_address, ursula.worker_address, config["contract_agent"], config["event"],
+                              config["argument_filters"], config["metrics"]) for config in event_collectors_config]
 
     return event_metrics_collectors
 
@@ -232,9 +243,16 @@ def initialize_prometheus_exporter(ursula, listen_address, port: int, metrics_pr
         "current_period_gauge": Gauge(f'{metrics_prefix}_current_period', 'Current period'),
         "current_eth_block_number": Gauge(f'{metrics_prefix}_current_eth_block_number', 'Current Ethereum block'),
         "substakes_count_gauge": Gauge(f'{metrics_prefix}_substakes_count', 'Substakes count'),
+        "current_worker_is_me_gauge": Gauge(f'{metrics_prefix}_current_worker_is_me', 'Current worker is me'),
+
     }
 
     event_metrics_collectors = get_event_metrics_collectors(ursula, metrics_prefix)
+
+    if not ursula.federated_only:
+        staking_agent = ContractAgency.get_agent(StakingEscrowAgent, registry=ursula.registry)
+        node_metrics["current_worker_is_me_gauge"].set(
+            staking_agent.get_worker_from_staker(ursula.checksum_address) == ursula.worker_address)
 
     # Scheduling
     metrics_task = task.LoopingCall(collect_prometheus_metrics, ursula=ursula,
