@@ -33,7 +33,7 @@ class EventMetricsCollector:
                     self.metrics[arg].set(event['args'][arg])
 
 
-def collect_prometheus_metrics(ursula, blockchain, event_metrics_collectors: List[EventMetricsCollector], node_metrics):
+def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetricsCollector], node_metrics):
     base_payload = {'app_version': nucypher.__version__,
                     'teacher_version': str(ursula.TEACHER_VERSION),
                     'host': str(ursula.rest_interface),
@@ -49,17 +49,25 @@ def collect_prometheus_metrics(ursula, blockchain, event_metrics_collectors: Lis
 
     if not ursula.federated_only:
 
+        blockchain = BlockchainInterfaceFactory.get_or_create_interface(provider_uri=ursula.provider_uri)
+
         node_metrics["current_eth_block_number"].set(blockchain.client.block_number)
 
         nucypher_token_actor = NucypherTokenActor(ursula.registry, checksum_address=ursula.checksum_address)
         node_metrics["eth_balance_gauge"].set(nucypher_token_actor.eth_balance)
         node_metrics["token_balance_gauge"].set(int(nucypher_token_actor.token_balance))
 
+        nucypher_worker_token_actor = NucypherTokenActor(ursula.registry, checksum_address=ursula.worker_address)
+        node_metrics["worker_eth_balance_gauge"].set(nucypher_worker_token_actor.eth_balance)
+        node_metrics["worker_token_balance_gauge"].set(int(nucypher_worker_token_actor.token_balance))
+
         for event_metrics_collector in event_metrics_collectors:
             event_metrics_collector.collect()
 
         staking_agent = ContractAgency.get_agent(StakingEscrowAgent, registry=ursula.registry)
         work_lock_agent = ContractAgency.get_agent(WorkLockAgent, registry=ursula.registry)
+
+        node_metrics["substakes_count_gauge"].set(staking_agent.contract.functions.getSubStakesLength(ursula.checksum_address).call())
 
         locked = staking_agent.get_locked_tokens(staker_address=ursula.checksum_address, periods=1)
 
@@ -211,6 +219,8 @@ def initialize_prometheus_exporter(ursula, listen_address, port: int, metrics_pr
                                 states=['starting', 'running', 'stopped']),
         "eth_balance_gauge": Gauge(f'{metrics_prefix}_eth_balance', 'Ethereum balance'),
         "token_balance_gauge": Gauge(f'{metrics_prefix}_token_balance', 'NuNit balance'),
+        "worker_eth_balance_gauge": Gauge(f'{metrics_prefix}_worker_eth_balance', 'Worker Ethereum balance'),
+        "worker_token_balance_gauge": Gauge(f'{metrics_prefix}_worker_token_balance', 'Worker NuNit balance'),
         "requests_counter": Counter(f'{metrics_prefix}_http_failures', 'HTTP Failures', ['method', 'endpoint']),
         "host_info": Info(f'{metrics_prefix}_host_info', 'Description of info'),
         "active_stake_gauge": Gauge(f'{metrics_prefix}_active_stake', 'Active stake'),
@@ -220,17 +230,15 @@ def initialize_prometheus_exporter(ursula, listen_address, port: int, metrics_pr
         "available_refund_gauge": Gauge(f'{metrics_prefix}_available_refund', 'Available refund'),
         "policies_held_gauge": Gauge(f'{metrics_prefix}_policies_held', 'Policies held'),
         "current_period_gauge": Gauge(f'{metrics_prefix}_current_period', 'Current period'),
-        "current_eth_block_number": Gauge(f'{metrics_prefix}_current_eth_block_number', 'Current Ethereum block')
+        "current_eth_block_number": Gauge(f'{metrics_prefix}_current_eth_block_number', 'Current Ethereum block'),
+        "substakes_count_gauge": Gauge(f'{metrics_prefix}_substakes_count', 'Substakes count'),
     }
 
     event_metrics_collectors = get_event_metrics_collectors(ursula, metrics_prefix)
 
-    blockchain = BlockchainInterfaceFactory.get_or_create_interface(provider_uri=ursula.provider_uri)
-
     # Scheduling
     metrics_task = task.LoopingCall(collect_prometheus_metrics, ursula=ursula,
-                                    event_metrics_collectors=event_metrics_collectors, node_metrics=node_metrics,
-                                    blockchain=blockchain)
+                                    event_metrics_collectors=event_metrics_collectors, node_metrics=node_metrics)
     metrics_task.start(interval=10, now=False)  # TODO: make configurable
 
     # WSGI Service
