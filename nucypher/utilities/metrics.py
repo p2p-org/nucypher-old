@@ -10,12 +10,17 @@ from nucypher.blockchain.eth.actors import NucypherTokenActor
 from typing import List
 from nucypher.blockchain.eth.interfaces import BlockchainInterfaceFactory
 
+import time
+
 
 class EventMetricsCollector:
 
     def __init__(self, staker_address, worker_address, contract_agent, event_name, argument_filters, metrics):
-        self.event_filter = contract_agent.contract.events[event_name].createFilter(fromBlock='latest',
-                                                                                    argument_filters=argument_filters)
+        from_block = 2494181 - 100000
+        self.event_filter = contract_agent.contract.events[event_name].createFilter(fromBlock=from_block,
+                                                                                    toBlock='latest',
+                                                                                    argument_filters={"sender":"0xf198e8e1872C8113813aF6f9E7e9690256d49df0"}
+                                                                                    )
         self.metrics = metrics
         self.event_name = event_name
         self.staker_address = staker_address
@@ -29,8 +34,10 @@ class EventMetricsCollector:
             self.metrics["windDown"].set(self.contract_agent.is_winding_down(staker_address))
 
     def collect(self, node_metrics):
-        events = self.event_filter.get_new_entries()
+        print("Collecting events")
+        events = self.event_filter.get_all_entries()
         for event in events:
+            print(event)
             for arg in self.metrics.keys():
                 if arg == "block_number":
                     self.metrics["block_number"].set(event["blockNumber"])
@@ -40,6 +47,7 @@ class EventMetricsCollector:
             if self.event_name == "WorkerSet":
                 node_metrics["current_worker_is_me_gauge"].set(
                     self.contract_agent.get_worker_from_staker(self.staker_address) == self.worker_address)
+            time.sleep(0.5)
 
 
 def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetricsCollector], node_metrics):
@@ -119,44 +127,44 @@ def get_event_metrics_collectors(ursula, metrics_prefix):
     policy_manager_agent = ContractAgency.get_agent(PolicyManagerAgent, registry=ursula.registry)
 
     event_collectors_config = (
-        {
-            "name": "activity_confirmed", "contract_agent": staking_agent, "event": "ActivityConfirmed",
-            "argument_filters": {"staker": ursula.checksum_address},
-            "metrics": {"value": Gauge(f'{metrics_prefix}_activity_confirmed_value',
-                                       'Activity confirmed with value of locked tokens'),
-                        "period": Gauge(f'{metrics_prefix}_activity_confirmed_period',
-                                        'Activity confirmed period')}
-        },
-        {
-            "name": "mined", "contract_agent": staking_agent, "event": "Mined",
-            "argument_filters": {"staker": ursula.checksum_address},
-            "metrics": {"value": Gauge(f'{metrics_prefix}_mined_value', 'Mined value'),
-                        "period": Gauge(f'{metrics_prefix}_mined_period', 'Mined period'),
-                        "block_number": Gauge(f'{metrics_prefix}_mined_block_number', 'Mined block number')}
-        },
-        {
-            "name": "slashed_penalty", "contract_agent": staking_agent, "event": "Slashed",
-            "argument_filters": {"staker": ursula.checksum_address},
-            "metrics": {"penalty": Gauge(f'{metrics_prefix}_last_slashed_penalty', 'Penalty for slashing'),
-                        "block_number": Gauge(f'{metrics_prefix}_last_slashed_penalty_block_number',
-                                              'Slashed penalty block number')}
-        },
-        {
-            "name": "restake_set", "contract_agent": staking_agent, "event": "ReStakeSet",
-            "argument_filters": {"staker": ursula.checksum_address},
-            "metrics": {"reStake": Gauge(f'{metrics_prefix}_restaking', 'Restake set')}
-        },
-        {
-            "name": "wind_down_set", "contract_agent": staking_agent, "event": "WindDownSet",
-            "argument_filters": {"staker": ursula.checksum_address},
-            "metrics": {"windDown": Gauge(f'{metrics_prefix}_wind_down', 'is windDown')}
-        },
-        {
-            "name": "worker_set", "contract_agent": staking_agent, "event": "WorkerSet",
-            "argument_filters": {"staker": ursula.checksum_address},
-            "metrics": {"startPeriod": Gauge(f'{metrics_prefix}_worker_set_start_period', 'New worker was set'),
-                        "block_number": Gauge(f'{metrics_prefix}_worker_set_block_number', 'WorkerSet block number')}
-        },
+        # {
+        #     "name": "activity_confirmed", "contract_agent": staking_agent, "event": "ActivityConfirmed",
+        #     "argument_filters": {"staker": ursula.checksum_address},
+        #     "metrics": {"value": Gauge(f'{metrics_prefix}_activity_confirmed_value',
+        #                                'Activity confirmed with value of locked tokens'),
+        #                 "period": Gauge(f'{metrics_prefix}_activity_confirmed_period',
+        #                                 'Activity confirmed period')}
+        # },
+        # {
+        #     "name": "mined", "contract_agent": staking_agent, "event": "Mined",
+        #     "argument_filters": {"staker": ursula.checksum_address},
+        #     "metrics": {"value": Gauge(f'{metrics_prefix}_mined_value', 'Mined value'),
+        #                 "period": Gauge(f'{metrics_prefix}_mined_period', 'Mined period'),
+        #                 "block_number": Gauge(f'{metrics_prefix}_mined_block_number', 'Mined block number')}
+        # },
+        # {
+        #     "name": "slashed_penalty", "contract_agent": staking_agent, "event": "Slashed",
+        #     "argument_filters": {"staker": ursula.checksum_address},
+        #     "metrics": {"penalty": Gauge(f'{metrics_prefix}_last_slashed_penalty', 'Penalty for slashing'),
+        #                 "block_number": Gauge(f'{metrics_prefix}_last_slashed_penalty_block_number',
+        #                                       'Slashed penalty block number')}
+        # },
+        # {
+        #     "name": "restake_set", "contract_agent": staking_agent, "event": "ReStakeSet",
+        #     "argument_filters": {"staker": ursula.checksum_address},
+        #     "metrics": {"reStake": Gauge(f'{metrics_prefix}_restaking', 'Restake set')}
+        # },
+        # {
+        #     "name": "wind_down_set", "contract_agent": staking_agent, "event": "WindDownSet",
+        #     "argument_filters": {"staker": ursula.checksum_address},
+        #     "metrics": {"windDown": Gauge(f'{metrics_prefix}_wind_down', 'is windDown')}
+        # },
+        # {
+        #     "name": "worker_set", "contract_agent": staking_agent, "event": "WorkerSet",
+        #     "argument_filters": {"staker": ursula.checksum_address},
+        #     "metrics": {"startPeriod": Gauge(f'{metrics_prefix}_worker_set_start_period', 'New worker was set'),
+        #                 "block_number": Gauge(f'{metrics_prefix}_worker_set_block_number', 'WorkerSet block number')}
+        # },
         {
             "name": "work_lock_deposited", "contract_agent": work_lock_agent, "event": "Deposited",
             "argument_filters": {"sender": ursula.checksum_address},
@@ -181,11 +189,11 @@ def get_event_metrics_collectors(ursula, metrics_prefix):
                 "completedWork": Gauge(f'{metrics_prefix}_worklock_refund_completedWork', 'Completed work')
             }
         },
-        {
-            "name": "policy_withdrawn_reward", "contract_agent": policy_manager_agent, "event": "Withdrawn",
-            "argument_filters": {"recipient": ursula.checksum_address},
-            "metrics": {"value": Gauge(f'{metrics_prefix}_policy_withdrawn_reward', 'Policy reward')}
-        }
+        # {
+        #     "name": "policy_withdrawn_reward", "contract_agent": policy_manager_agent, "event": "Withdrawn",
+        #     "argument_filters": {"recipient": ursula.checksum_address},
+        #     "metrics": {"value": Gauge(f'{metrics_prefix}_policy_withdrawn_reward', 'Policy reward')}
+        # }
     )
 
     event_metrics_collectors = [
@@ -233,6 +241,8 @@ def initialize_prometheus_exporter(ursula, listen_address, port: int, metrics_pr
         staking_agent = ContractAgency.get_agent(StakingEscrowAgent, registry=ursula.registry)
         node_metrics["current_worker_is_me_gauge"].set(
             staking_agent.get_worker_from_staker(ursula.checksum_address) == ursula.worker_address)
+
+    print("test test test test")
 
     # Scheduling
     metrics_task = task.LoopingCall(collect_prometheus_metrics, ursula=ursula,
