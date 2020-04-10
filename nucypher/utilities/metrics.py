@@ -12,14 +12,13 @@ from nucypher.blockchain.eth.interfaces import BlockchainInterfaceFactory
 
 import time
 
-
 class EventMetricsCollector:
 
     def __init__(self, staker_address, worker_address, contract_agent, event_name, argument_filters, metrics):
         from_block = 2494181 - 100000
         self.event_filter = contract_agent.contract.events[event_name].createFilter(fromBlock=from_block,
                                                                                     toBlock='latest',
-                                                                                    argument_filters={"sender":"0xf198e8e1872C8113813aF6f9E7e9690256d49df0"}
+                                                                                    argument_filters={"sender":"0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c"}
                                                                                     )
         self.metrics = metrics
         self.event_name = event_name
@@ -38,6 +37,7 @@ class EventMetricsCollector:
         events = self.event_filter.get_all_entries()
         for event in events:
             print(event)
+            print("NAME", self.event_name, event["event"])
             for arg in self.metrics.keys():
                 if arg == "block_number":
                     self.metrics["block_number"].set(event["blockNumber"])
@@ -47,7 +47,10 @@ class EventMetricsCollector:
             if self.event_name == "WorkerSet":
                 node_metrics["current_worker_is_me_gauge"].set(
                     self.contract_agent.get_worker_from_staker(self.staker_address) == self.worker_address)
-            time.sleep(0.5)
+
+            if self.event_name == "Bid" or self.event_name == "Refund":
+                node_metrics["worklock_deposited_eth_gauge"].set(self.contract_agent.get_deposited_eth("0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c"))
+            time.sleep(30)
 
 
 def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetricsCollector], node_metrics):
@@ -77,8 +80,11 @@ def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetri
         node_metrics["worker_eth_balance_gauge"].set(nucypher_worker_token_actor.eth_balance)
         node_metrics["worker_token_balance_gauge"].set(int(nucypher_worker_token_actor.token_balance))
 
-        for event_metrics_collector in event_metrics_collectors:
-            event_metrics_collector.collect(node_metrics)
+        if not node_metrics["stop"]:
+            for event_metrics_collector in event_metrics_collectors:
+                event_metrics_collector.collect(node_metrics)
+        node_metrics["stop"] = True
+
 
         staking_agent = ContractAgency.get_agent(StakingEscrowAgent, registry=ursula.registry)
         work_lock_agent = ContractAgency.get_agent(WorkLockAgent, registry=ursula.registry)
@@ -232,7 +238,9 @@ def initialize_prometheus_exporter(ursula, listen_address, port: int, metrics_pr
         "current_eth_block_number": Gauge(f'{metrics_prefix}_current_eth_block_number', 'Current Ethereum block'),
         "substakes_count_gauge": Gauge(f'{metrics_prefix}_substakes_count', 'Substakes count'),
         "current_worker_is_me_gauge": Gauge(f'{metrics_prefix}_current_worker_is_me', 'Current worker is me'),
+        "worklock_deposited_eth_gauge": Gauge(f'{metrics_prefix}_worklock_current_deposited_eth', 'Worklock deposited ETH'),
 
+        "stop": False
     }
 
     event_metrics_collectors = get_event_metrics_collectors(ursula, metrics_prefix)
@@ -247,7 +255,7 @@ def initialize_prometheus_exporter(ursula, listen_address, port: int, metrics_pr
     # Scheduling
     metrics_task = task.LoopingCall(collect_prometheus_metrics, ursula=ursula,
                                     event_metrics_collectors=event_metrics_collectors, node_metrics=node_metrics)
-    metrics_task.start(interval=10, now=False)  # TODO: make configurable
+    metrics_task.start(interval=100, now=True)  # TODO: make configurable
 
     # WSGI Service
     root = Resource()
