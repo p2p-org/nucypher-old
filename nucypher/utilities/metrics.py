@@ -50,7 +50,6 @@ class EventMetricsCollector:
 
             if self.event_name == "Bid" or self.event_name == "Refund":
                 node_metrics["worklock_deposited_eth_gauge"].set(self.contract_agent.get_deposited_eth("0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c"))
-            time.sleep(30)
 
 
 def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetricsCollector], node_metrics):
@@ -264,7 +263,7 @@ def initialize_prometheus_exporter(ursula, listen_address, port: int, metrics_pr
     # Scheduling
     metrics_task = task.LoopingCall(collect_prometheus_metrics, ursula=ursula,
                                     event_metrics_collectors=event_metrics_collectors, node_metrics=node_metrics)
-    metrics_task.start(interval=100, now=True)  # TODO: make configurable
+    metrics_task.start(interval=10, now=True)  # TODO: make configurable
 
     # WSGI Service
     root = Resource()
