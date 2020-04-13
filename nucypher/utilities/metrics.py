@@ -6,7 +6,7 @@ from twisted.internet import reactor, task
 
 import nucypher
 from nucypher.blockchain.eth.agents import ContractAgency, StakingEscrowAgent, WorkLockAgent, PolicyManagerAgent
-from nucypher.blockchain.eth.actors import NucypherTokenActor
+from nucypher.blockchain.eth.actors import NucypherTokenActor, Bidder
 from typing import List
 from nucypher.blockchain.eth.interfaces import BlockchainInterfaceFactory
 
@@ -110,8 +110,10 @@ def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetri
             work_lock_agent.get_remaining_work(checksum_address="0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c")
         )
 
+        work_lock_bidder = Bidder(checksum_address=ursula.checksum_address)
+
         node_metrics["work_lock_refund_completed_work_gauge"].set(
-            staking_agent.get_completed_work(bidder_address="0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c")
+            work_lock_bidder.completed_work
         )
 
         node_metrics["policies_held_gauge"].set(len(ursula.datastore.get_all_policy_arrangements()))
