@@ -18,7 +18,7 @@ class EventMetricsCollector:
         from_block = 2494181 - 100000
         self.event_filter = contract_agent.contract.events[event_name].createFilter(fromBlock=from_block,
                                                                                     toBlock='latest',
-                                                                                    argument_filters={"sender":"0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c"}
+                                                                                    argument_filters=argument_filters
                                                                                     )
         self.metrics = metrics
         self.event_name = event_name
@@ -180,23 +180,23 @@ def get_event_metrics_collectors(ursula, metrics_prefix):
         },
         {
             "name": "work_lock_deposited", "contract_agent": work_lock_agent, "event": "Deposited",
-            "argument_filters": {"sender": ursula.checksum_address},
+            "argument_filters": {"sender": "0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c"},
             "metrics": {"value": Gauge(f'{metrics_prefix}_worklock_deposited_value', 'Deposited value')}
         },
         {
             "name": "work_lock_bid", "contract_agent": work_lock_agent, "event": "Bid",
-            "argument_filters": {"sender": ursula.checksum_address},
+            "argument_filters": {"sender": "0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c"},
             "metrics": {"depositedETH": Gauge(f'{metrics_prefix}_worklock_bid_depositedETH', 'Deposited ETH value')}
         },
         {
             "name": "work_lock_claimed", "contract_agent": work_lock_agent, "event": "Claimed",
-            "argument_filters": {"sender": ursula.checksum_address},
+            "argument_filters": {"sender": "0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c"},
             "metrics": {
                 "claimedTokens": Gauge(f'{metrics_prefix}_worklock_claimed_claimedTokens', 'Claimed tokens value')}
         },
         {
             "name": "work_lock_refund", "contract_agent": work_lock_agent, "event": "Refund",
-            "argument_filters": {"sender": ursula.checksum_address},
+            "argument_filters": {"sender": "0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c"},
             "metrics": {
                 "refundETH": Gauge(f'{metrics_prefix}_worklock_refund_refundETH', 'Refunded ETH')
             }
