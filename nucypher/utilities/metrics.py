@@ -243,7 +243,7 @@ def initialize_prometheus_exporter(ursula, listen_address, port: int, metrics_pr
         "substakes_count_gauge": Gauge(f'{metrics_prefix}_substakes_count', 'Substakes count'),
         "current_worker_is_me_gauge": Gauge(f'{metrics_prefix}_current_worker_is_me', 'Current worker is me'),
         "worklock_deposited_eth_gauge": Gauge(f'{metrics_prefix}_worklock_current_deposited_eth', 'Worklock deposited ETH'),
-        "worklock_remaining_work_gauge": Gauge(f'{metrics_prefix}_worklock_remaining_work_gauge', 'Worklock remaining work'),
+        "worklock_remaining_work_gauge": Gauge(f'{metrics_prefix}_worklock_refund_remaining_work', 'Worklock remaining work'),
 
         "stop": False
     }
