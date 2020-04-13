@@ -107,6 +107,10 @@ def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetri
         node_metrics["available_refund_gauge"].set(
             work_lock_agent.get_available_refund(checksum_address=ursula.checksum_address))
 
+        node_metrics["worklock_remaining_work_gauge"].set(
+            work_lock_agent.get_remaining_work(checksum_address=ursula.checksum_address)
+        )
+
         node_metrics["policies_held_gauge"].set(len(ursula.datastore.get_all_policy_arrangements()))
 
         node_metrics["current_period_gauge"].set(staking_agent.get_current_period())
@@ -239,6 +243,7 @@ def initialize_prometheus_exporter(ursula, listen_address, port: int, metrics_pr
         "substakes_count_gauge": Gauge(f'{metrics_prefix}_substakes_count', 'Substakes count'),
         "current_worker_is_me_gauge": Gauge(f'{metrics_prefix}_current_worker_is_me', 'Current worker is me'),
         "worklock_deposited_eth_gauge": Gauge(f'{metrics_prefix}_worklock_current_deposited_eth', 'Worklock deposited ETH'),
+        "worklock_remaining_work_gauge": Gauge(f'{metrics_prefix}_worklock_remaining_work_gauge', 'Worklock remaining work'),
 
         "stop": False
     }
