@@ -141,44 +141,44 @@ def get_event_metrics_collectors(ursula, metrics_prefix):
     policy_manager_agent = ContractAgency.get_agent(PolicyManagerAgent, registry=ursula.registry)
 
     event_collectors_config = (
-        # {
-        #     "name": "activity_confirmed", "contract_agent": staking_agent, "event": "ActivityConfirmed",
-        #     "argument_filters": {"staker": ursula.checksum_address},
-        #     "metrics": {"value": Gauge(f'{metrics_prefix}_activity_confirmed_value',
-        #                                'Activity confirmed with value of locked tokens'),
-        #                 "period": Gauge(f'{metrics_prefix}_activity_confirmed_period',
-        #                                 'Activity confirmed period')}
-        # },
-        # {
-        #     "name": "mined", "contract_agent": staking_agent, "event": "Mined",
-        #     "argument_filters": {"staker": ursula.checksum_address},
-        #     "metrics": {"value": Gauge(f'{metrics_prefix}_mined_value', 'Mined value'),
-        #                 "period": Gauge(f'{metrics_prefix}_mined_period', 'Mined period'),
-        #                 "block_number": Gauge(f'{metrics_prefix}_mined_block_number', 'Mined block number')}
-        # },
-        # {
-        #     "name": "slashed_penalty", "contract_agent": staking_agent, "event": "Slashed",
-        #     "argument_filters": {"staker": ursula.checksum_address},
-        #     "metrics": {"penalty": Gauge(f'{metrics_prefix}_last_slashed_penalty', 'Penalty for slashing'),
-        #                 "block_number": Gauge(f'{metrics_prefix}_last_slashed_penalty_block_number',
-        #                                       'Slashed penalty block number')}
-        # },
-        # {
-        #     "name": "restake_set", "contract_agent": staking_agent, "event": "ReStakeSet",
-        #     "argument_filters": {"staker": ursula.checksum_address},
-        #     "metrics": {"reStake": Gauge(f'{metrics_prefix}_restaking', 'Restake set')}
-        # },
-        # {
-        #     "name": "wind_down_set", "contract_agent": staking_agent, "event": "WindDownSet",
-        #     "argument_filters": {"staker": ursula.checksum_address},
-        #     "metrics": {"windDown": Gauge(f'{metrics_prefix}_wind_down', 'is windDown')}
-        # },
-        # {
-        #     "name": "worker_set", "contract_agent": staking_agent, "event": "WorkerSet",
-        #     "argument_filters": {"staker": ursula.checksum_address},
-        #     "metrics": {"startPeriod": Gauge(f'{metrics_prefix}_worker_set_start_period', 'New worker was set'),
-        #                 "block_number": Gauge(f'{metrics_prefix}_worker_set_block_number', 'WorkerSet block number')}
-        # },
+        {
+            "name": "activity_confirmed", "contract_agent": staking_agent, "event": "ActivityConfirmed",
+            "argument_filters": {"staker": ursula.checksum_address},
+            "metrics": {"value": Gauge(f'{metrics_prefix}_activity_confirmed_value',
+                                       'Activity confirmed with value of locked tokens'),
+                        "period": Gauge(f'{metrics_prefix}_activity_confirmed_period',
+                                        'Activity confirmed period')}
+        },
+        {
+            "name": "mined", "contract_agent": staking_agent, "event": "Mined",
+            "argument_filters": {"staker": ursula.checksum_address},
+            "metrics": {"value": Gauge(f'{metrics_prefix}_mined_value', 'Mined value'),
+                        "period": Gauge(f'{metrics_prefix}_mined_period', 'Mined period'),
+                        "block_number": Gauge(f'{metrics_prefix}_mined_block_number', 'Mined block number')}
+        },
+        {
+            "name": "slashed_penalty", "contract_agent": staking_agent, "event": "Slashed",
+            "argument_filters": {"staker": ursula.checksum_address},
+            "metrics": {"penalty": Gauge(f'{metrics_prefix}_last_slashed_penalty', 'Penalty for slashing'),
+                        "block_number": Gauge(f'{metrics_prefix}_last_slashed_penalty_block_number',
+                                              'Slashed penalty block number')}
+        },
+        {
+            "name": "restake_set", "contract_agent": staking_agent, "event": "ReStakeSet",
+            "argument_filters": {"staker": ursula.checksum_address},
+            "metrics": {"reStake": Gauge(f'{metrics_prefix}_restaking', 'Restake set')}
+        },
+        {
+            "name": "wind_down_set", "contract_agent": staking_agent, "event": "WindDownSet",
+            "argument_filters": {"staker": ursula.checksum_address},
+            "metrics": {"windDown": Gauge(f'{metrics_prefix}_wind_down', 'is windDown')}
+        },
+        {
+            "name": "worker_set", "contract_agent": staking_agent, "event": "WorkerSet",
+            "argument_filters": {"staker": ursula.checksum_address},
+            "metrics": {"startPeriod": Gauge(f'{metrics_prefix}_worker_set_start_period', 'New worker was set'),
+                        "block_number": Gauge(f'{metrics_prefix}_worker_set_block_number', 'WorkerSet block number')}
+        },
         {
             "name": "work_lock_deposited", "contract_agent": work_lock_agent, "event": "Deposited",
             "argument_filters": {"sender": ursula.checksum_address},
@@ -202,11 +202,11 @@ def get_event_metrics_collectors(ursula, metrics_prefix):
                 "refundETH": Gauge(f'{metrics_prefix}_worklock_refund_refundETH', 'Refunded ETH')
             }
         },
-        # {
-        #     "name": "policy_withdrawn_reward", "contract_agent": policy_manager_agent, "event": "Withdrawn",
-        #     "argument_filters": {"recipient": ursula.checksum_address},
-        #     "metrics": {"value": Gauge(f'{metrics_prefix}_policy_withdrawn_reward', 'Policy reward')}
-        # }
+        {
+            "name": "policy_withdrawn_reward", "contract_agent": policy_manager_agent, "event": "Withdrawn",
+            "argument_filters": {"recipient": ursula.checksum_address},
+            "metrics": {"value": Gauge(f'{metrics_prefix}_policy_withdrawn_reward', 'Policy reward')}
+        }
     )
 
     event_metrics_collectors = [
