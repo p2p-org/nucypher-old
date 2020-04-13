@@ -41,6 +41,10 @@ class EventMetricsCollector:
                 node_metrics["current_worker_is_me_gauge"].set(
                     self.contract_agent.get_worker_from_staker(self.staker_address) == self.worker_address)
 
+            if self.event_name == "Bid" or self.event_name == "Refund":
+                node_metrics["worklock_deposited_eth_gauge"].set(
+                    self.contract_agent.get_deposited_eth(self.staker_address))
+
 
 def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetricsCollector], node_metrics):
     base_payload = {'app_version': nucypher.__version__,
@@ -224,7 +228,8 @@ def initialize_prometheus_exporter(ursula, listen_address, port: int, metrics_pr
         "current_eth_block_number": Gauge(f'{metrics_prefix}_current_eth_block_number', 'Current Ethereum block'),
         "substakes_count_gauge": Gauge(f'{metrics_prefix}_substakes_count', 'Substakes count'),
         "current_worker_is_me_gauge": Gauge(f'{metrics_prefix}_current_worker_is_me', 'Current worker is me'),
-
+        "worklock_deposited_eth_gauge": Gauge(f'{metrics_prefix}_worklock_current_deposited_eth',
+                                              'Worklock deposited ETH')
     }
 
     event_metrics_collectors = get_event_metrics_collectors(ursula, metrics_prefix)
