@@ -111,6 +111,10 @@ def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetri
             work_lock_agent.get_remaining_work(checksum_address="0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c")
         )
 
+        node_metrics["work_lock_refund_completed_work_gauge"].set(
+            work_lock_agent.get_completed_work(checksum_address="0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c")
+        )
+
         node_metrics["policies_held_gauge"].set(len(ursula.datastore.get_all_policy_arrangements()))
 
         node_metrics["current_period_gauge"].set(staking_agent.get_current_period())
@@ -195,8 +199,7 @@ def get_event_metrics_collectors(ursula, metrics_prefix):
             "name": "work_lock_refund", "contract_agent": work_lock_agent, "event": "Refund",
             "argument_filters": {"sender": ursula.checksum_address},
             "metrics": {
-                "refundETH": Gauge(f'{metrics_prefix}_worklock_refund_refundETH', 'Refunded ETH'),
-                "completedWork": Gauge(f'{metrics_prefix}_worklock_refund_completedWork', 'Completed work')
+                "refundETH": Gauge(f'{metrics_prefix}_worklock_refund_refundETH', 'Refunded ETH')
             }
         },
         # {
@@ -244,6 +247,7 @@ def initialize_prometheus_exporter(ursula, listen_address, port: int, metrics_pr
         "current_worker_is_me_gauge": Gauge(f'{metrics_prefix}_current_worker_is_me', 'Current worker is me'),
         "worklock_deposited_eth_gauge": Gauge(f'{metrics_prefix}_worklock_current_deposited_eth', 'Worklock deposited ETH'),
         "worklock_remaining_work_gauge": Gauge(f'{metrics_prefix}_worklock_refund_remaining_work', 'Worklock remaining work'),
+        "work_lock_refund_completed_work_gauge": Gauge(f'{metrics_prefix}_worklock_refund_completedWork', 'Worklock completed work'),
 
         "stop": False
     }
