@@ -110,7 +110,7 @@ def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetri
             work_lock_agent.get_remaining_work(checksum_address="0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c")
         )
 
-        work_lock_bidder = Bidder(checksum_address="0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c")
+        work_lock_bidder = Bidder(checksum_address="0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c", registry=ursula.registry)
 
         node_metrics["work_lock_refund_completed_work_gauge"].set(
             work_lock_bidder.completed_work
