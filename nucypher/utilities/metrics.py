@@ -111,7 +111,7 @@ def collect_prometheus_metrics(ursula, event_metrics_collectors: List[EventMetri
         )
 
         node_metrics["work_lock_refund_completed_work_gauge"].set(
-            work_lock_agent.get_completed_work(checksum_address="0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c")
+            staking_agent.get_completed_work(checksum_address="0xA47f8D1Df610DC56DD523ec1Ac335392E0891B2c")
         )
 
         node_metrics["policies_held_gauge"].set(len(ursula.datastore.get_all_policy_arrangements()))
