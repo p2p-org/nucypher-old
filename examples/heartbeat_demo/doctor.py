@@ -98,7 +98,6 @@ for message_kit in message_kits:
         start = timer()
         retrieved_plaintexts = doctor.retrieve(
             label=label,
-            message_kit=message_kit,
             enrico=data_source,
             alice_verifying_key=alices_sig_pubkey
         )

@@ -19,7 +19,6 @@ import os
 
 import click
 from constant_sorrow.constants import NO_BLOCKCHAIN_CONNECTION
-from twisted.internet import stdio
 
 from nucypher.blockchain.economics import EconomicsFactory
 from nucypher.blockchain.eth.utils import datetime_at_period
@@ -51,7 +50,7 @@ from nucypher.cli.options import (
     option_provider_uri,
     option_registry_filepath,
     option_teacher_uri,
-)
+    option_signer_uri)
 from nucypher.cli.processes import UrsulaCommandProtocol
 from nucypher.cli.types import EIP55_CHECKSUM_ADDRESS, NETWORK_PORT
 from nucypher.config.characters import UrsulaConfiguration
@@ -65,7 +64,8 @@ class UrsulaConfigOptions:
     __option_name__ = 'config_options'
 
     def __init__(self, geth, provider_uri, worker_address, federated_only, rest_host,
-            rest_port, db_filepath, network, registry_filepath, dev, poa, light, gas_strategy):
+                 rest_port, db_filepath, network, registry_filepath, dev, poa, light,
+                 gas_strategy, signer_uri, availability_check):
 
         if federated_only:
             # TODO: consider rephrasing in a more universal voice.
@@ -85,6 +85,7 @@ class UrsulaConfigOptions:
 
         self.eth_node = eth_node
         self.provider_uri = provider_uri
+        self.signer_uri = signer_uri
         self.worker_address = worker_address
         self.federated_only = federated_only
         self.rest_host = rest_host
@@ -96,6 +97,7 @@ class UrsulaConfigOptions:
         self.poa = poa
         self.light = light
         self.gas_strategy = gas_strategy
+        self.availability_check = availability_check
 
     def create_config(self, emitter, config_file):
         if self.dev:
@@ -108,12 +110,15 @@ class UrsulaConfigOptions:
                 registry_filepath=self.registry_filepath,
                 provider_process=self.eth_node,
                 provider_uri=self.provider_uri,
+                signer_uri=self.signer_uri,
                 gas_strategy=self.gas_strategy,
                 checksum_address=self.worker_address,
                 federated_only=self.federated_only,
                 rest_host=self.rest_host,
                 rest_port=self.rest_port,
-                db_filepath=self.db_filepath)
+                db_filepath=self.db_filepath,
+                availability_check=self.availability_check
+            )
         else:
             try:
                 return UrsulaConfiguration.from_configuration_file(
@@ -123,13 +128,16 @@ class UrsulaConfigOptions:
                     registry_filepath=self.registry_filepath,
                     provider_process=self.eth_node,
                     provider_uri=self.provider_uri,
+                    signer_uri=self.signer_uri,
                     gas_strategy=self.gas_strategy,
                     rest_host=self.rest_host,
                     rest_port=self.rest_port,
                     db_filepath=self.db_filepath,
                     poa=self.poa,
                     light=self.light,
-                    federated_only=self.federated_only)
+                    federated_only=self.federated_only,
+                    availability_check=self.availability_check
+                )
             except FileNotFoundError:
                 return actions.handle_missing_configuration_file(character_config_class=UrsulaConfiguration,
                                                                  config_file=config_file)
@@ -170,9 +178,11 @@ class UrsulaConfigOptions:
                                             registry_filepath=self.registry_filepath,
                                             provider_process=self.eth_node,
                                             provider_uri=self.provider_uri,
+                                            signer_uri=self.signer_uri,
                                             gas_strategy=self.gas_strategy,
                                             poa=self.poa,
-                                            light=self.light)
+                                            light=self.light,
+                                            availability_check=self.availability_check)
 
     def get_updates(self) -> dict:
         payload = dict(rest_host=self.rest_host,
@@ -183,9 +193,11 @@ class UrsulaConfigOptions:
                        checksum_address=self.worker_address,
                        registry_filepath=self.registry_filepath,
                        provider_uri=self.provider_uri,
+                       signer_uri=self.signer_uri,
                        gas_strategy=self.gas_strategy,
                        poa=self.poa,
-                       light=self.light)
+                       light=self.light,
+                       availability_check=self.availability_check)
         # Depends on defaults being set on Configuration classes, filtrates None values
         updates = {k: v for k, v in payload.items() if v is not None}
         return updates
@@ -195,6 +207,7 @@ group_config_options = group_options(
     UrsulaConfigOptions,
     geth=option_geth,
     provider_uri=option_provider_uri(),
+    signer_uri=option_signer_uri,
     gas_strategy=option_gas_strategy,
     worker_address=click.option('--worker-address', help="Run the worker-ursula with a specified address", type=EIP55_CHECKSUM_ADDRESS),
     federated_only=option_federated_only,
@@ -205,7 +218,9 @@ group_config_options = group_options(
     registry_filepath=option_registry_filepath,
     poa=option_poa,
     light=option_light,
-    dev=option_dev)
+    dev=option_dev,
+    availability_check=click.option('--availability-check/--disable-availability-check', help="Enable or disable self-health checks while running", is_flag=True, default=None)
+)
 
 
 class UrsulaCharacterOptions:
@@ -222,6 +237,7 @@ class UrsulaCharacterOptions:
 
         ursula_config = self.config_options.create_config(emitter, config_file)
 
+        # TODO: WAT
         client_password = None
         if not ursula_config.federated_only:
             if not self.config_options.dev and not json_ipc:
@@ -259,7 +275,6 @@ def ursula():
     """
     "Ursula the Untrusted" PRE Re-encryption node management commands.
     """
-    pass
 
 
 @ursula.command()
@@ -320,15 +335,12 @@ def forget(general_config, config_options, config_file):
 @option_dry_run
 @group_general_config
 @click.option('--interactive', '-I', help="Run interactively", is_flag=True, default=False)
+@click.option('--prometheus', help="Run the ursula prometheus exporter", is_flag=True, default=False)
 @click.option('--metrics-port', help="Run a Prometheus metrics exporter on specified HTTP port", type=NETWORK_PORT)
-def run(general_config, character_options, config_file, interactive, dry_run, metrics_port):
-    """
-    Run an "Ursula" node.
-    """
-
-    #
-    # Setup
-    #
+@click.option("--metrics-listen-address", help="Run a prometheus metrics exporter on specified IP address", default='')
+@click.option("--metrics-prefix", help="Create metrics params with specified prefix", default="ursula")
+def run(general_config, character_options, config_file, interactive, dry_run, metrics_port, metrics_listen_address, metrics_prefix, prometheus):
+    """Run an "Ursula" node."""
 
     worker_address = character_options.config_options.worker_address
     emitter = _setup_emitter(general_config, worker_address=worker_address)
@@ -345,49 +357,13 @@ def run(general_config, character_options, config_file, interactive, dry_run, me
             json_ipc=general_config.json_ipc
     )
 
-    #
-    # Additional Services
-    #
-
-    if interactive:
-        stdio.StandardIO(UrsulaCommandProtocol(ursula=URSULA, emitter=emitter))
-    if metrics_port:
-        # Prevent import without prometheus installed
-        from nucypher.utilities.metrics import initialize_prometheus_exporter
-        initialize_prometheus_exporter(ursula=URSULA, port=metrics_port)  # TODO: Integrate with Hendrix TLS Deploy?
-
-    #
-    # Deploy Warnings
-    #
-
-    emitter.message(f"Starting Ursula on {URSULA.rest_interface}", color='green', bold=True)
-    emitter.message(f"Connecting to {','.join(ursula_config.domains)}", color='green', bold=True)
-    emitter.message("Working ~ Keep Ursula Online!", color='blue', bold=True)
-
-    # Run
-    try:
-        if dry_run:
-            # Prevent the cataloging of services, and do not run the reactor
-            return  # <-- ABORT - (Last Chance)
-        node_deployer = URSULA.get_deployer()
-        node_deployer.addServices()
-        node_deployer.catalogServers(node_deployer.hendrix)
-        node_deployer.run()  # <--- Blocking Call (Reactor)
-
-    # Handle Crash
-    except Exception as e:
-        ursula_config.log.critical(str(e))
-        emitter.message(
-            f"{e.__class__.__name__} {e}",
-            color='red',
-            bold=True)
-        raise  # Crash :-(
-
-    # Graceful Exit
-    finally:
-        emitter.message("Stopping Ursula", color='green')
-        ursula_config.cleanup()
-        emitter.message("Ursula Stopped", color='red')
+    return URSULA.run(emitter=emitter,
+                      start_reactor=not dry_run,
+                      interactive=interactive,
+                      prometheus=prometheus,
+                      metrics_listen_address=metrics_listen_address,
+                      metrics_port=metrics_port,
+                      metrics_prefix=metrics_prefix)
 
 
 @ursula.command(name='save-metadata')

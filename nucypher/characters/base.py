@@ -43,6 +43,7 @@ from umbral.signing import Signature
 from nucypher.blockchain.eth.agents import StakingEscrowAgent
 from nucypher.blockchain.eth.interfaces import BlockchainInterface
 from nucypher.blockchain.eth.registry import BaseContractRegistry, InMemoryContractRegistry
+from nucypher.blockchain.eth.signers import Signer
 from nucypher.characters.control.controllers import JSONRPCController, CLIController
 from nucypher.config.keyring import NucypherKeyring
 from nucypher.config.node import CharacterConfiguration
@@ -86,6 +87,7 @@ class Character(Learner):
                  crypto_power: CryptoPower = None,
                  crypto_power_ups: List[CryptoPowerUp] = None,
                  provider_uri: str = None,
+                 signer: Signer = None,
                  registry: BaseContractRegistry = None,
                  *args, **kwargs
                  ) -> None:
@@ -177,11 +179,11 @@ class Character(Learner):
 
         if is_me:
             self.treasure_maps = {}  # type: dict
-            self.network_middleware = network_middleware or RestMiddleware()
 
             #
             # Signing Power
             #
+            self.signer = signer
             try:
                 signing_power = self._crypto_power.power_ups(SigningPower)  # type: SigningPower
                 self._stamp = signing_power.get_signature_stamp()  # type: SignatureStamp
@@ -196,6 +198,9 @@ class Character(Learner):
                 self.registry = registry or InMemoryContractRegistry.from_latest_publication(network=list(domains)[0])  #TODO: #1580
             else:
                 self.registry = NO_BLOCKCHAIN_CONNECTION.bool_value(False)
+
+            # REST
+            self.network_middleware = network_middleware or RestMiddleware(registry=self.registry)
 
             #
             # Learner

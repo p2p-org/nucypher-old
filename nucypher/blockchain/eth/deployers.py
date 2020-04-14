@@ -48,8 +48,8 @@ from nucypher.blockchain.eth.decorators import validate_secret, validate_checksu
 from nucypher.blockchain.eth.interfaces import (
     BlockchainDeployerInterface,
     BlockchainInterfaceFactory,
-    VersionedContract
-)
+    VersionedContract,
+    BlockchainInterface)
 from nucypher.blockchain.eth.registry import AllocationRegistry
 from nucypher.blockchain.eth.registry import BaseContractRegistry
 
@@ -693,8 +693,8 @@ class StakingEscrowDeployer(BaseContractDeployer, UpgradeableContractMixin, Owna
 
         # TODO: Consider looking for absence of Initialized event - see #1193
         # This mimics initialization pre-condition in Issuer (StakingEscrow's base contract)
-        current_supply_1 = deployed_contract.functions.currentSupply1().call()
-        return current_supply_1 == 0
+        current_minting_period = deployed_contract.functions.currentMintingPeriod().call()
+        return current_minting_period == 0
 
     @property
     def is_active(self) -> bool:
@@ -705,8 +705,8 @@ class StakingEscrowDeployer(BaseContractDeployer, UpgradeableContractMixin, Owna
 
         # TODO: Consider looking for Initialized event - see #1193
         # This mimics isInitialized() modifier in Issuer (StakingEscrow's base contract)
-        current_supply_1 = deployed_contract.functions.currentSupply1().call()
-        return current_supply_1 != 0
+        current_minting_period = deployed_contract.functions.currentMintingPeriod().call()
+        return current_minting_period != 0
 
 
 class PolicyManagerDeployer(BaseContractDeployer, UpgradeableContractMixin, OwnableContractMixin):
@@ -870,11 +870,20 @@ class StakingInterfaceDeployer(BaseContractDeployer, UpgradeableContractMixin):
                                                                     contract_name=policy_contract_name,
                                                                     proxy_name=policy_proxy_name)
 
+        worklock_name = WorklockDeployer.contract_name
+        try:
+            self.worklock_contract = self.blockchain.get_contract_by_name(registry=self.registry,
+                                                                          contract_name=worklock_name)
+        except BaseContractRegistry.UnknownContract:
+            self.worklock_contract = None
+
     def _deploy_essential(self, contract_version: str, gas_limit: int = None, confirmations: int = 0):
         """Note: These parameters are order-sensitive"""
+        worklock_address = self.worklock_contract.address if self.worklock_contract else BlockchainInterface.NULL_ADDRESS
         constructor_args = (self.token_contract.address,
                             self.staking_contract.address,
-                            self.policy_contract.address)
+                            self.policy_contract.address,
+                            worklock_address)
 
         contract, deployment_receipt = self.blockchain.deploy_contract(self.deployer_address,
                                                                        self.registry,
@@ -1020,9 +1029,7 @@ class PreallocationEscrowDeployer(BaseContractDeployer, UpgradeableContractMixin
         self.check_deployment_readiness()
         router_contract = self.blockchain.get_contract_by_name(registry=self.registry,
                                                                contract_name=self._router_deployer.contract_name)
-        constructor_args = (router_contract.address,
-                            self.token_contract.address,
-                            self.staking_escrow_contract.address)
+        constructor_args = (router_contract.address,)
 
         deployer_address = self.sidekick_address if use_sidekick else self.deployer_address
         self._contract, deploy_receipt = self.blockchain.deploy_contract(deployer_address,

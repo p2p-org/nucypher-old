@@ -1,4 +1,4 @@
-pragma solidity ^0.5.3;
+pragma solidity ^0.6.1;
 
 
 import "contracts/Issuer.sol";
@@ -7,7 +7,7 @@ import "contracts/Issuer.sol";
 /**
 * @notice PolicyManager interface
 */
-contract PolicyManagerInterface {
+interface PolicyManagerInterface {
     function register(address _node, uint16 _period) external;
     function updateReward(address _node, uint16 _period) external;
     function escrow() external view returns (address);
@@ -18,7 +18,7 @@ contract PolicyManagerInterface {
 /**
 * @notice Adjudicator interface
 */
-contract AdjudicatorInterface {
+interface AdjudicatorInterface {
     function escrow() external view returns (address);
 }
 
@@ -26,7 +26,7 @@ contract AdjudicatorInterface {
 /**
 * @notice WorkLock interface
 */
-contract WorkLockInterface {
+interface WorkLockInterface {
     function escrow() external view returns (address);
 }
 
@@ -34,7 +34,7 @@ contract WorkLockInterface {
 /**
 * @notice Contract holds and locks stakers tokens.
 * Each staker that locks their tokens will receive some compensation
-* @dev |v2.2.3|
+* @dev |v2.3.1|
 */
 contract StakingEscrow is Issuer {
     using AdditionalMath for uint256;
@@ -479,7 +479,7 @@ contract StakingEscrow is Issuer {
     * Only if this parameter is not locked
     * @param _reStake Value for parameter
     */
-    function setReStake(bool _reStake) external isInitialized {
+    function setReStake(bool _reStake) external {
         require(!isReStakeLocked(msg.sender));
         StakerInfo storage info = stakerInfo[msg.sender];
         if (info.reStakeDisabled == !_reStake) {
@@ -493,7 +493,7 @@ contract StakingEscrow is Issuer {
     * @notice Lock `reStake` parameter. Only if this parameter is not locked
     * @param _lockReStakeUntilPeriod Can't change `reStake` value until this period
     */
-    function lockReStake(uint16 _lockReStakeUntilPeriod) external isInitialized {
+    function lockReStake(uint16 _lockReStakeUntilPeriod) external {
         require(!isReStakeLocked(msg.sender) &&
             _lockReStakeUntilPeriod > getCurrentPeriod());
         stakerInfo[msg.sender].lockReStakeUntilPeriod = _lockReStakeUntilPeriod;
@@ -540,6 +540,59 @@ contract StakingEscrow is Issuer {
                 subStake.lastPeriod = nextPeriod;
             }
         }
+    }
+
+    /**
+    * @notice Batch deposit. Allowed only initial deposit for each staker
+    * @param _stakers Stakers
+    * @param _numberOfSubStakes Number of sub-stakes which belong to staker in _values and _periods arrays
+    * @param _values Amount of tokens to deposit for each staker
+    * @param _periods Amount of periods during which tokens will be locked for each staker
+    */
+    function batchDeposit(
+        address[] calldata _stakers,
+        uint256[] calldata _numberOfSubStakes,
+        uint256[] calldata _values,
+        uint16[] calldata _periods
+    )
+        external
+    {
+        uint256 subStakesLength = _values.length;
+        require(_stakers.length != 0 &&
+            _stakers.length == _numberOfSubStakes.length &&
+            subStakesLength >= _stakers.length &&
+            _periods.length == subStakesLength);
+        uint16 previousPeriod = getCurrentPeriod() - 1;
+        uint16 nextPeriod = previousPeriod + 2;
+        uint256 sumValue = 0;
+
+        uint256 j = 0;
+        for (uint256 i = 0; i < _stakers.length; i++) {
+            address staker = _stakers[i];
+            uint256 numberOfSubStakes = _numberOfSubStakes[i];
+            uint256 endIndex = j + numberOfSubStakes;
+            require(numberOfSubStakes > 0 && subStakesLength >= endIndex);
+            StakerInfo storage info = stakerInfo[staker];
+            require(info.subStakes.length == 0);
+            require(workerToStaker[staker] == address(0), "A staker can't be a worker for another staker");
+            stakers.push(staker);
+            policyManager.register(staker, previousPeriod);
+
+            for (; j < endIndex; j++) {
+                uint256 value =  _values[j];
+                uint16 periods = _periods[j];
+                require(value >= minAllowableLockedTokens && periods >= minLockedPeriods);
+                info.value = info.value.add(value);
+                info.subStakes.push(SubStakeInfo(nextPeriod, 0, periods, value));
+                sumValue = sumValue.add(value);
+                emit Deposited(staker, value, periods);
+                emit Locked(staker, value, nextPeriod, periods);
+            }
+            require(info.value <= maxAllowableLockedTokens);
+        }
+        require(j == subStakesLength);
+
+        token.safeTransferFrom(msg.sender, address(this), sumValue);
     }
 
     /**
@@ -608,7 +661,7 @@ contract StakingEscrow is Issuer {
     * @param _value Amount of tokens to deposit
     * @param _periods Amount of periods during which tokens will be locked
     */
-    function deposit(address _staker, address _payer, uint256 _value, uint16 _periods) internal isInitialized {
+    function deposit(address _staker, address _payer, uint256 _value, uint16 _periods) internal {
         require(_value != 0);
         StakerInfo storage info = stakerInfo[_staker];
         require(workerToStaker[_staker] == address(0) || workerToStaker[_staker] == info.worker,
@@ -773,7 +826,7 @@ contract StakingEscrow is Issuer {
     /**
     * @notice Confirm activity for the next period and mine for the previous period
     */
-    function confirmActivity() external {
+    function confirmActivity() external isInitialized {
         address staker = getStakerFromWorker(msg.sender);
         StakerInfo storage info = stakerInfo[staker];
         require(info.value > 0, "Staker must have a stake to confirm activity");
@@ -958,7 +1011,7 @@ contract StakingEscrow is Issuer {
         address _investigator,
         uint256 _reward
     )
-        public
+        public isInitialized
     {
         require(msg.sender == address(adjudicator));
         require(_penalty > 0);
@@ -1226,7 +1279,8 @@ contract StakingEscrow is Issuer {
     function getSubStakeInfo(address _staker, uint256 _index)
     // TODO change to structure when ABIEncoderV2 is released (#1501)
 //        public view returns (SubStakeInfo)
-        external view returns (uint16 firstPeriod, uint16 lastPeriod, uint16 periods, uint256 lockedValue)
+        // TODO "virtual" only for tests, probably will be removed after #1512
+        external view virtual returns (uint16 firstPeriod, uint16 lastPeriod, uint16 periods, uint256 lockedValue)
     {
         SubStakeInfo storage info = stakerInfo[_staker].subStakes[_index];
         firstPeriod = info.firstPeriod;
@@ -1263,7 +1317,7 @@ contract StakingEscrow is Issuer {
     function delegateGetStakerInfo(address _target, bytes32 _staker)
         internal returns (StakerInfo memory result)
     {
-        bytes32 memoryAddress = delegateGetData(_target, "stakerInfo(address)", 1, _staker, 0);
+        bytes32 memoryAddress = delegateGetData(_target, this.stakerInfo.selector, 1, _staker, 0);
         assembly {
             result := memoryAddress
         }
@@ -1276,7 +1330,7 @@ contract StakingEscrow is Issuer {
         internal returns (SubStakeInfo memory result)
     {
         bytes32 memoryAddress = delegateGetData(
-            _target, "getSubStakeInfo(address,uint256)", 2, _staker, bytes32(_index));
+            _target, this.getSubStakeInfo.selector, 2, _staker, bytes32(_index));
         assembly {
             result := memoryAddress
         }
@@ -1289,33 +1343,33 @@ contract StakingEscrow is Issuer {
         internal returns (Downtime memory result)
     {
         bytes32 memoryAddress = delegateGetData(
-            _target, "getPastDowntime(address,uint256)", 2, _staker, bytes32(_index));
+            _target, this.getPastDowntime.selector, 2, _staker, bytes32(_index));
         assembly {
             result := memoryAddress
         }
     }
 
     /// @dev the `onlyWhileUpgrading` modifier works through a call to the parent `verifyState`
-    function verifyState(address _testTarget) public {
+    function verifyState(address _testTarget) public override virtual {
         super.verifyState(_testTarget);
-        require((delegateGet(_testTarget, "isTestContract()") == 0) == !isTestContract);
-        require(uint16(delegateGet(_testTarget, "minWorkerPeriods()")) == minWorkerPeriods);
-        require(delegateGet(_testTarget, "minAllowableLockedTokens()") == minAllowableLockedTokens);
-        require(delegateGet(_testTarget, "maxAllowableLockedTokens()") == maxAllowableLockedTokens);
-        require(address(delegateGet(_testTarget, "policyManager()")) == address(policyManager));
-        require(address(delegateGet(_testTarget, "adjudicator()")) == address(adjudicator));
-        require(address(delegateGet(_testTarget, "workLock()")) == address(workLock));
-        require(delegateGet(_testTarget, "lockedPerPeriod(uint16)",
+        require((delegateGet(_testTarget, this.isTestContract.selector) == 0) == !isTestContract);
+        require(uint16(delegateGet(_testTarget, this.minWorkerPeriods.selector)) == minWorkerPeriods);
+        require(delegateGet(_testTarget, this.minAllowableLockedTokens.selector) == minAllowableLockedTokens);
+        require(delegateGet(_testTarget, this.maxAllowableLockedTokens.selector) == maxAllowableLockedTokens);
+        require(address(delegateGet(_testTarget, this.policyManager.selector)) == address(policyManager));
+        require(address(delegateGet(_testTarget, this.adjudicator.selector)) == address(adjudicator));
+        require(address(delegateGet(_testTarget, this.workLock.selector)) == address(workLock));
+        require(delegateGet(_testTarget, this.lockedPerPeriod.selector,
             bytes32(bytes2(RESERVED_PERIOD))) == lockedPerPeriod[RESERVED_PERIOD]);
-        require(address(delegateGet(_testTarget, "workerToStaker(address)", bytes32(0))) ==
+        require(address(delegateGet(_testTarget, this.workerToStaker.selector, bytes32(0))) ==
             workerToStaker[address(0)]);
 
-        require(delegateGet(_testTarget, "getStakersLength()") == stakers.length);
+        require(delegateGet(_testTarget, this.getStakersLength.selector) == stakers.length);
         if (stakers.length == 0) {
             return;
         }
         address stakerAddress = stakers[0];
-        require(address(uint160(delegateGet(_testTarget, "stakers(uint256)", 0))) == stakerAddress);
+        require(address(uint160(delegateGet(_testTarget, this.stakers.selector, 0))) == stakerAddress);
         StakerInfo storage info = stakerInfo[stakerAddress];
         bytes32 staker = bytes32(uint256(stakerAddress));
         StakerInfo memory infoToCheck = delegateGetStakerInfo(_testTarget, staker);
@@ -1331,7 +1385,7 @@ contract StakingEscrow is Issuer {
             infoToCheck.workerStartPeriod == info.workerStartPeriod &&
             infoToCheck.windDown == info.windDown);
 
-        require(delegateGet(_testTarget, "getPastDowntimeLength(address)", staker) ==
+        require(delegateGet(_testTarget, this.getPastDowntimeLength.selector, staker) ==
             info.pastDowntime.length);
         for (uint256 i = 0; i < info.pastDowntime.length && i < MAX_CHECKED_VALUES; i++) {
             Downtime storage downtime = info.pastDowntime[i];
@@ -1340,7 +1394,7 @@ contract StakingEscrow is Issuer {
                 downtimeToCheck.endPeriod == downtime.endPeriod);
         }
 
-        require(delegateGet(_testTarget, "getSubStakesLength(address)", staker) == info.subStakes.length);
+        require(delegateGet(_testTarget, this.getSubStakesLength.selector, staker) == info.subStakes.length);
         for (uint256 i = 0; i < info.subStakes.length && i < MAX_CHECKED_VALUES; i++) {
             SubStakeInfo storage subStakeInfo = info.subStakes[i];
             SubStakeInfo memory subStakeInfoToCheck = delegateGetSubStakeInfo(_testTarget, staker, i);
@@ -1351,13 +1405,13 @@ contract StakingEscrow is Issuer {
         }
 
         if (info.worker != address(0)) {
-            require(address(delegateGet(_testTarget, "workerToStaker(address)", bytes32(uint256(info.worker)))) ==
+            require(address(delegateGet(_testTarget, this.workerToStaker.selector, bytes32(uint256(info.worker)))) ==
                 workerToStaker[info.worker]);
         }
     }
 
     /// @dev the `onlyWhileUpgrading` modifier works through a call to the parent `finishUpgrade`
-    function finishUpgrade(address _target) public {
+    function finishUpgrade(address _target) public override virtual {
         super.finishUpgrade(_target);
         StakingEscrow escrow = StakingEscrow(_target);
         minLockedPeriods = escrow.minLockedPeriods();

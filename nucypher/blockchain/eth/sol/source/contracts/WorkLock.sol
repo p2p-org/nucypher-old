@@ -1,9 +1,10 @@
-pragma solidity ^0.5.3;
+pragma solidity ^0.6.5;
 
 
 import "zeppelin/math/SafeMath.sol";
 import "zeppelin/token/ERC20/SafeERC20.sol";
 import "zeppelin/utils/Address.sol";
+import "zeppelin/ownership/Ownable.sol";
 import "contracts/NuCypherToken.sol";
 import "contracts/StakingEscrow.sol";
 import "contracts/lib/AdditionalMath.sol";
@@ -12,7 +13,7 @@ import "contracts/lib/AdditionalMath.sol";
 /**
 * @notice The WorkLock distribution contract
 */
-contract WorkLock {
+contract WorkLock is Ownable {
     using SafeERC20 for NuCypherToken;
     using SafeMath for uint256;
     using AdditionalMath for uint256;
@@ -27,6 +28,7 @@ contract WorkLock {
     event BiddersChecked(address indexed sender, uint256 startIndex, uint256 endIndex);
     event ForceRefund(address indexed sender, address indexed bidder, uint256 refundETH);
     event CompensationWithdrawn(address indexed sender, uint256 value);
+    event Shutdown(address indexed sender);
 
     struct WorkInfo {
         uint256 depositedETH;
@@ -35,40 +37,40 @@ contract WorkLock {
         uint128 index;
     }
 
-    NuCypherToken public token;
-    StakingEscrow public escrow;
-    address public creator;
+    uint16 public constant SLOWING_REFUND = 100;
+    uint256 private constant MAX_ETH_SUPPLY = 2e10 ether;
 
-    uint256 public startBidDate;
-    uint256 public endBidDate;
-    uint256 public endCancellationDate;
+    NuCypherToken public immutable token;
+    StakingEscrow public immutable escrow;
 
     /*
     * @dev WorkLock calculations:
     * bid = minBid + bonusETHPart
-    * bonusTokenSupply = tokenSupply - bidders.length * minBid
+    * bonusTokenSupply = tokenSupply - bidders.length * minAllowableLockedTokens
     * bonusDepositRate = bonusTokenSupply / bonusETHSupply
     * claimedTokens = minAllowableLockedTokens + bonusETHPart * bonusDepositRate
     * bonusRefundRate = bonusDepositRate * SLOWING_REFUND / boostingRefund
     * refundETH = completedWork / refundRate
     */
-    uint256 public boostingRefund;
-    uint16 public constant SLOWING_REFUND = 100;
-    uint256 private constant MAX_ETH_SUPPLY = 2e10 ether;
+    uint256 public immutable boostingRefund;
+    uint256 public immutable minAllowedBid;
+    uint16 public immutable stakingPeriods;
+    // copy from the escrow contract
+    uint256 public immutable maxAllowableLockedTokens;
+    uint256 public immutable minAllowableLockedTokens;
 
-    uint256 public minAllowedBid;
     uint256 public tokenSupply;
+    uint256 public startBidDate;
+    uint256 public endBidDate;
+    uint256 public endCancellationDate;
+
     uint256 public bonusETHSupply;
-    uint16 public stakingPeriods;
     mapping(address => WorkInfo) public workInfo;
     mapping(address => uint256) public compensation;
 
     address[] public bidders;
     // if value == bidders.length then WorkLock is fully checked
     uint256 public nextBidderToCheck;
-    // copy from the escrow contract
-    uint256 public maxAllowableLockedTokens;
-    uint256 public minAllowableLockedTokens;
 
     /**
     * @dev Checks timestamp regarding cancellation window
@@ -123,9 +125,8 @@ contract WorkLock {
         boostingRefund = _boostingRefund;
         stakingPeriods = _stakingPeriods;
         minAllowedBid = _minAllowedBid;
-        maxAllowableLockedTokens = escrow.maxAllowableLockedTokens();
-        minAllowableLockedTokens = escrow.minAllowableLockedTokens();
-        creator = msg.sender;
+        maxAllowableLockedTokens = _escrow.maxAllowableLockedTokens();
+        minAllowableLockedTokens = _escrow.minAllowableLockedTokens();
     }
 
     /**
@@ -338,11 +339,22 @@ contract WorkLock {
     }
 
     /**
-    * @notice Cancels distribution, makes possible to retrieve all bids and creator gets all tokens
+    * @notice Cancels distribution, makes possible to retrieve all bids and owner gets all tokens
     */
-    function shutdown() internal {
+    function shutdown() external onlyOwner {
+        require(!isClaimingAvailable(), "Claiming has already been enabled");
+        internalShutdown();
+    }
+
+    /**
+    * @notice Cancels distribution, makes possible to retrieve all bids and owner gets all tokens
+    */
+    function internalShutdown() internal {
+        startBidDate = 0;
+        endBidDate = 0;
         endCancellationDate = uint256(0) - 1; // "infinite" cancellation window
-        token.safeTransfer(creator, tokenSupply);
+        token.safeTransfer(owner(), tokenSupply);
+        emit Shutdown(msg.sender);
     }
 
     /**
@@ -357,7 +369,7 @@ contract WorkLock {
 
         uint256 minNumberOfBidders = tokenSupply.divCeil(maxAllowableLockedTokens);
         if (bidders.length < minNumberOfBidders) {
-            shutdown();
+            internalShutdown();
             return;
         }
 
@@ -523,10 +535,11 @@ contract WorkLock {
     * @notice Refund ETH for the completed work
     */
     function refund() external returns (uint256 refundETH) {
+        WorkInfo storage info = workInfo[msg.sender];
+        require(info.claimed, "Tokens must be claimed before refund");
         refundETH = getAvailableRefund(msg.sender);
         require(refundETH > 0, "Nothing to refund: there is no ETH to refund or no completed work");
 
-        WorkInfo storage info = workInfo[msg.sender];
         if (refundETH == info.depositedETH) {
             escrow.setWorkMeasurement(msg.sender, false);
         }

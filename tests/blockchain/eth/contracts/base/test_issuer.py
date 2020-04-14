@@ -78,6 +78,11 @@ def test_issuer(testerchain, token, deploy_contract):
     tx = token.functions.approve(issuer.address, economics.erc20_reward_supply).transact({'from': creator})
     testerchain.wait_for_receipt(tx)
 
+    # Can't burn tokens before initialization
+    with pytest.raises((TransactionFailed, ValueError)):
+        tx = issuer.functions.burn(1).transact({'from': creator})
+        testerchain.wait_for_receipt(tx)
+
     # Only owner can initialize
     with pytest.raises((TransactionFailed, ValueError)):
         tx = issuer.functions.initialize(0).transact({'from': ursula})
@@ -226,7 +231,7 @@ def test_upgrading(testerchain, token, deploy_contract):
 
     # Deploy contract
     contract_library_v1, _ = deploy_contract(
-        contract_name='Issuer',
+        contract_name='IssuerMock',
         _token=token.address,
         _hoursPerPeriod=1,
         _miningCoefficient=1,

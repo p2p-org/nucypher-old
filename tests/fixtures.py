@@ -55,6 +55,7 @@ from nucypher.blockchain.eth.registry import (
     IndividualAllocationRegistry,
     CanonicalRegistrySource
 )
+from nucypher.blockchain.eth.signers import Web3Signer
 from nucypher.blockchain.eth.sol.compile import SolidityCompiler
 from nucypher.blockchain.eth.token import NU
 from nucypher.characters.lawful import Enrico, Bob
@@ -152,7 +153,8 @@ def ursula_federated_test_config():
                                         federated_only=True,
                                         network_middleware=MockRestMiddleware(),
                                         save_metadata=False,
-                                        reload_metadata=False,)
+                                        reload_metadata=False,
+                                        availability_check=False)
     yield ursula_config
     ursula_config.cleanup()
 
@@ -169,7 +171,8 @@ def ursula_decentralized_test_config(test_registry):
                                         network_middleware=MockRestMiddleware(),
                                         save_metadata=False,
                                         reload_metadata=False,
-                                        registry=test_registry)
+                                        registry=test_registry,
+                                        availability_check=False)
     yield ursula_config
     ursula_config.cleanup()
 
@@ -463,6 +466,7 @@ def _make_testerchain():
 
     # Mock TransactingPower Consumption (Deployer)
     testerchain.transacting_power = TransactingPower(password=INSECURE_DEVELOPMENT_PASSWORD,
+                                                     signer=Web3Signer(client=testerchain.client),
                                                      account=testerchain.etherbase_account)
     testerchain.transacting_power.activate()
     return testerchain
@@ -507,6 +511,7 @@ def _make_agency(testerchain, test_registry, token_economics):
 
     # Mock TransactingPower Consumption (Deployer)
     testerchain.transacting_power = TransactingPower(password=INSECURE_DEVELOPMENT_PASSWORD,
+                                                     signer=Web3Signer(client=testerchain.client),
                                                      account=testerchain.etherbase_account)
     testerchain.transacting_power.activate()
 
@@ -629,6 +634,7 @@ def stakers(testerchain, agency, token_economics, test_registry):
 
     # Mock Powerup consumption (Deployer)
     blockchain.transacting_power = TransactingPower(password=INSECURE_DEVELOPMENT_PASSWORD,
+                                                    signer=Web3Signer(client=testerchain.client),
                                                     account=blockchain.etherbase_account)
     blockchain.transacting_power.activate()
 
@@ -642,7 +648,9 @@ def stakers(testerchain, agency, token_economics, test_registry):
         staker = Staker(is_me=True, checksum_address=account, registry=test_registry)
 
         # Mock TransactingPower consumption
-        staker.transacting_power = TransactingPower(password=INSECURE_DEVELOPMENT_PASSWORD, account=account)
+        staker.transacting_power = TransactingPower(password=INSECURE_DEVELOPMENT_PASSWORD,
+                                                    signer=Web3Signer(client=testerchain.client),
+                                                    account=account)
         staker.transacting_power.activate()
 
         amount = MIN_STAKE_FOR_TESTS + random.randrange(BONUS_TOKENS_FOR_TESTS)
@@ -829,10 +837,10 @@ def software_stakeholder(testerchain, agency, stakeholder_config_file_location, 
 
     #                          0xaAa482c790b4301bE18D75A0D1B11B2ACBEF798B
     stakeholder_private_key = '255f64a948eeb1595b8a2d1e76740f4683eca1c8f1433d13293db9b6e27676cc'
-    address = testerchain.provider.ethereum_tester.add_account(stakeholder_private_key,
+    address = testerchain.provider.ethereum_tester.add_account(private_key=stakeholder_private_key,
                                                                password=INSECURE_DEVELOPMENT_PASSWORD)
 
-    testerchain.provider.ethereum_tester.unlock_account(address, password=INSECURE_DEVELOPMENT_PASSWORD)
+    testerchain.provider.ethereum_tester.unlock_account(account=address, password=INSECURE_DEVELOPMENT_PASSWORD)
 
     tx = {'to': address,
           'from': testerchain.etherbase_account,
@@ -843,6 +851,7 @@ def software_stakeholder(testerchain, agency, stakeholder_config_file_location, 
 
     # Mock TransactingPower consumption (Etherbase)
     transacting_power = TransactingPower(account=testerchain.etherbase_account,
+                                         signer=Web3Signer(testerchain.client),
                                          password=INSECURE_DEVELOPMENT_PASSWORD)
     transacting_power.activate()
 
@@ -942,7 +951,9 @@ def get_random_checksum_address():
 @pytest.fixture(scope='module')
 def mock_transacting_power_activation(testerchain):
     def _mock_transacting_power_activation(password, account):
-        testerchain.transacting_power = TransactingPower(password=password, account=account)
+        testerchain.transacting_power = TransactingPower(password=password,
+                                                         signer=Web3Signer(testerchain.client),
+                                                         account=account)
         testerchain.transacting_power.activate()
 
     return _mock_transacting_power_activation
